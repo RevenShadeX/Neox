@@ -201,10 +201,14 @@ class Game {
       row = this.sql(
         "SELECT until FROM cooldowns WHERE user=? AND command=?",
       ).get(id, key);
-    assert(
-      !row || row.until <= now,
-      `Try again in ${Math.ceil(((row?.until || 0) - now) / 1000)} seconds.`,
-    );
+    if (row && row.until > now) {
+      const error = new GameError(
+        `Try again in ${Math.ceil((row.until - now) / 1000)} seconds.`,
+        "COOLDOWN",
+      );
+      error.retryAt = row.until;
+      throw error;
+    }
     this.sql(
       "INSERT INTO cooldowns(user,command,until) VALUES(?,?,?) ON CONFLICT(user,command) DO UPDATE SET until=excluded.until",
     ).run(id, key, now + ms);

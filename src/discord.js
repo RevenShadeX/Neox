@@ -20,6 +20,7 @@ const { ProfileService } = require("./profile-service");
 const { RoleRecovery } = require("./role-shop");
 const { roleAPI } = require("./discord-roles");
 const { DuelDelivery } = require("./duel-delivery");
+const { CooldownNotices } = require("./cooldown-notices");
 const UI = require("./ui");
 function definitions() {
   return Object.entries(commands).map(([name, c]) => {
@@ -94,21 +95,24 @@ function createClient(
   const profileService = new ProfileService(client, profiles),
     api = roles || roleAPI(client),
     recovery = new RoleRecovery(game, api),
-    duelDelivery = new DuelDelivery(game, client);
+    duelDelivery = new DuelDelivery(game, client),
+    notices = new CooldownNotices({ clock: game.clock });
   let timer;
   const roleChecks = new Set();
   const originalDestroy = client.destroy.bind(client);
   client.neoxStop = async () => {
     clearInterval(timer);
     duelDelivery.stop();
-    await recovery.stop();
+    await Promise.all([recovery.stop(), notices.stop()]);
   };
   client.destroy = () => {
     clearInterval(timer);
     duelDelivery.stop();
+    void notices.stop();
     return originalDestroy();
   };
   client.neoxRecovery = recovery;
+  client.neoxNotices = notices;
   const errorText = (err) =>
     err instanceof GameError
       ? `⚠️ ${err.message}`
@@ -324,7 +328,13 @@ function createClient(
       output = execute(name, parsed.args, ctx);
     } catch (e) {
       if (e.code === "RULES_REQUIRED") output = execute("rules", [], ctx);
-      else {
+      else if (e.code === "COOLDOWN") {
+        await notices.show(`message:${ctx.userId}:${message.channelId || message.channel.id || ctx.guildId}`, e, async (payload) => {
+          const sent = await message.channel.send(decoratePayload(payload, emojis));
+          return sent && { edit: (p) => sent.edit(decoratePayload(p, emojis)), delete: () => sent.delete() };
+        });
+        return;
+      } else {
         await message.channel.send({
           content: errorText(e),
           allowedMentions: UI.allowedMentions,
@@ -346,6 +356,18 @@ function createClient(
   });
   async function failure(i, error) {
     try {
+      if (error.code === "COOLDOWN") {
+        await notices.show(`interaction:${i.id}`, error, async (payload) => {
+          if (i.deferred && !i.isModalSubmit?.() && !i.isChatInputCommand?.()) {
+            const sent = await i.followUp({ ...decoratePayload(payload, emojis), flags: 64 });
+            return { edit: (p) => i.webhook.editMessage(sent.id, decoratePayload(p, emojis)), delete: () => i.webhook.deleteMessage(sent.id) };
+          }
+          if (i.deferred || i.replied) await i.editReply(decoratePayload(payload, emojis));
+          else await i.reply({ ...decoratePayload(payload, emojis), flags: 64 });
+          return { edit: (p) => i.editReply(decoratePayload(p, emojis)), delete: () => i.deleteReply() };
+        });
+        return;
+      }
       let payload = {
         content: errorText(error),
         components: [],

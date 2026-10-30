@@ -127,3 +127,12 @@ Random matchmaking persists original queue locations and match linkage in expiri
 Added npm 12's version-pinned native build approval for better-sqlite3 12.11.1. A real isolated clean npm 12 install and native SQLite query succeeded. The upstream prebuild-install deprecation remains nonfatal. No production dependency vulnerabilities were reported.
 
 Validation: 795 tests passed before the remote merge; 860 tests passed after integrating the new features and fixes. Includes alias variations for all new commands plus direct gameplay, transaction, recovery, emoji and payload regressions. No live token or hosted database was used. Hosting permissions, actual deployed source consistency and restart behavior require live deployment verification. Source/package files can be updated while preserving private .env and data/.
+
+
+## Live countdown presentation and auto-deletion
+
+Added structured COOLDOWN errors carrying the actual retry deadline and a shared prefix/slash presentation for purple progress cards. Five-second cooldowns update through the last second and delete at expiry. Cooldowns up to 60 seconds use their real remaining deadline; longer waits show the actual unlock timestamp with a clearly labeled 15-second notice expiry. Successful results and original player messages remain visible. Component cooldown notices are private follow-ups and never replace the shared game panel.
+
+The scheduler uses one unreferenced timer, at most 128 tracked notices, bounded processing batches and limited parallel edits. Prefix spam reuses existing notices. Failed edits still reach deletion cleanup; missing messages and deletion errors are safe. Graceful shutdown clears notices and late sends cannot recreate timers. No new persistent tables, balances, progression changes or generated files.
+
+Verification: 869 tests passed, including prefix/slash auto-deletion, exact five-second behavior, singular labels, long cooldowns, bounded storage, safe Discord errors and shutdown races.

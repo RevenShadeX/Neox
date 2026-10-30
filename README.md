@@ -270,3 +270,10 @@ The reviewed release includes confirmed player payments, endless Rift stages, ba
 - `help battle` explains stages, ranked sparring, equipment, repairs and infusions in an embed using the current server prefix.
 
 Large loot summaries split into safe Discord messages, with rare-drop images in separate follow-ups. Emoji decoration falls back to readable Unicode when custom markup would exceed Discord text limits.
+
+
+### Live cooldown notices
+
+Prefix and slash cooldown replies use a purple **Neox • Recharging** embed with a progress bar and remaining wait. For cooldowns up to 60 seconds, the notice deletes itself when the action is ready; the final five seconds update once per second. Earlier updates are spaced out to reduce Discord API traffic. For longer cooldowns, the card shows Discord's relative unlock timestamp and explicitly counts down a 15-second notice lifetime, then clears itself while the real cooldown remains enforced.
+
+Repeated prefix attempts in the same channel reuse the active notice. Cleanup targets only the bot's temporary cooldown replies. Successful game results and the player's command messages remain visible. One shared unreferenced timer tracks at most 128 notices, processes bounded batches, and clears tracked notices during graceful shutdown. Countdown state stays in memory and adds no database rows or generated files. Discord edit/delete failures are caught safely.
