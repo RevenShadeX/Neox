@@ -59,6 +59,15 @@ function panel(game, s) {
         button(id("decline"), "Decline"),
       ),
     ];
+  } else if (s.kind === "payment") {
+    card = embed(
+      "Confirm Payment",
+      `Send **${v.amount.toLocaleString("en-US")} Dark Coins** to <@${v.recipient}>?\n\nThis transfer is final. No coins will move until you confirm.`,
+    );
+    components = [row(
+      button(id("confirm"), "Confirm Payment", ButtonStyle.Danger),
+      button(id("cancel"), "Cancel"),
+    )];
   } else if (s.kind === "coinflip") {
     card = embed(
       "🪙 Dark Coinflip",
