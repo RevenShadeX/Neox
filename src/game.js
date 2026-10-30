@@ -241,8 +241,10 @@ class Game {
     const abilities = [];
     for (const g of rows) {
       const b = C.equipment.find((e) => e.id === g.item);
-      attack += b.attack + 2 * (g.level - 1) + g.enhance * 3;
-      defense += b.defense + (g.level - 1) + g.enhance * 2;
+      const condition = this.sql("SELECT condition FROM gear_condition WHERE gear=?").get(g.id)?.condition ?? 100;
+      const effectiveness = 0.5 + condition / 200;
+      attack += Math.floor((b.attack + 2 * (g.level - 1) + g.enhance * 3) * effectiveness);
+      defense += Math.floor((b.defense + (g.level - 1) + g.enhance * 2) * effectiveness);
       if (g.slot === "armor") defense += this.sql("SELECT defense FROM armor_infusions WHERE gear=?").get(g.id)?.defense || 0;
       abilities.push(b.ability);
     }
@@ -609,6 +611,24 @@ class Game {
         assert(sacrificed > 0, "No monsters available to sacrifice.");
         this.item(id, "essence", "rift", total);
         return `**RIFT ALTAR • SACRIFICE COMPLETE**\nSacrificed: **${fmt(sacrificed)} monsters**\nGained: **${fmt(total)} Rift Essence**\n\nUse \`${this.getPrefix(ctx.guildId)} infuse armor-id amount\` to permanently strengthen armor.\nSacrifice all preserves one of each species.`;
+      }
+      case "repair": {
+        const rows = a[0] === "all"
+          ? this.sql("SELECT * FROM gear WHERE user=?").all(id)
+          : [this.gear(id, a[0])];
+        let cost = 0, repaired = 0;
+        for (const g of rows) {
+          assert(!this.locked(g.id), "Cancel active gear trades before repairing.");
+          const condition = this.sql("SELECT condition FROM gear_condition WHERE gear=?").get(g.id)?.condition ?? 100;
+          if (condition === 100) continue;
+          const base = C.equipment.find((e) => e.id === g.item);
+          cost += Math.max(1, Math.ceil((100 - condition) * (base.tier + 1) / 2));
+          repaired++;
+        }
+        assert(repaired, "Equipment is already at full condition.");
+        this.money(id, -cost, "equipment repairs");
+        for (const g of rows) this.sql("INSERT INTO gear_condition(gear,condition) VALUES(?,100) ON CONFLICT(gear) DO UPDATE SET condition=100").run(g.id);
+        return `**NEOX • EQUIPMENT REPAIRED**\nItems repaired: **${repaired}**\nCost: **${fmt(cost)} Dark Coins**\nCondition restored to **100%**.`;
       }
       case "infuse": {
         const g = this.gear(id, a[0]);
@@ -1044,6 +1064,16 @@ class Game {
         }
         const won = hp > 0 && (ehp <= 0 || hp > ehp),
           draw = hp > 0 && hp === ehp;
+        let battleLoot = "";
+        if (won && !draw && !enemy && this.rng.int(1, 100) <= (boss || stageBoss ? 35 : 12)) {
+          this.item(id, "box", "weapon", 1);
+          battleLoot = "\\nLoot: +1 Weapon Cache (open with n open weapon)";
+        }
+        for (const gear of me.rows) {
+          const condition = this.sql("SELECT condition FROM gear_condition WHERE gear=?").get(gear.id)?.condition ?? 100;
+          const loss = this.rng.int(1, 4);
+          this.sql("INSERT INTO gear_condition(gear,condition) VALUES(?,?) ON CONFLICT(gear) DO UPDATE SET condition=excluded.condition").run(gear.id, Math.max(0, condition - loss));
+        }
         const reward = 0;
         if (stage !== null && won && !draw && stage < 1000000000)
           this.sql("INSERT INTO battle_stages(user,stage) VALUES(?,?) ON CONFLICT(user) DO UPDATE SET stage=excluded.stage").run(id, stage + 1);
@@ -1073,7 +1103,7 @@ class Game {
           );
         }
         return {
-          content: `${enemy ? `Ranked spar against <@${enemyId}>` : boss ? "Boss battle against the Sovereign of the Rift" : `Expedition Stage ${stage} against ${elite ? "the Eternal Rift Sovereign" : stageBoss ? "a Rift Overlord" : "a Rift Sentinel"}`}\n${log.join("\n")}\n${draw ? "Draw" : won ? "Victory" : "Defeat"} • +0 Dark Coins • ${won ? 35 : 15} hunting XP\nRanked sparring uses saved equipment; no opponent coins are taken.`,
+          content: `${enemy ? `Ranked spar against <@${enemyId}>` : boss ? "Boss battle against the Sovereign of the Rift" : `Expedition Stage ${stage} against ${elite ? "the Eternal Rift Sovereign" : stageBoss ? "a Rift Overlord" : "a Rift Sentinel"}`}\n${log.join("\n")}\n${draw ? "Draw" : won ? "Victory" : "Defeat"} • +0 Dark Coins • ${won ? 35 : 15} hunting XP\nRanked sparring uses saved equipment; no opponent coins are taken.\\nEquipped gear loses 1–4% condition per fight. Repair with n repair all.${battleLoot}`,
           presentation: {
             kind: "card", command: name,
             combat: { won, draw, hp: Math.max(0, hp), enemyHP: Math.max(0, ehp),
