@@ -299,3 +299,8 @@ The emoji appears before role names and in dropdowns. Members see the duration b
 Duration starts when role delivery is confirmed, and `rolepurchases` shows active expiry times. Neox checks due expirations every five seconds, removes the purchased role, then clears the expiry job. Actual removal can be delayed by Discord outages, rate limits or missing role permissions; the job persists and retries with backoff. The bot must stay in the server with Manage Roles and above the sold role. Roles without a duration are never scheduled for removal.
 
 Expiry jobs survive restarts, listing deletion and routine purchase-history cleanup. Missing members/roles or already-removed roles finish safely when confirmed; inaccessible servers or uncertain ownership retain the job. No extra per-role timers or generated files are used. The worker has bounded concurrency and indexed due-job queries. Roles assigned as timed purchases remain subject to that purchased expiry even if an administrator independently reassigns the same role.
+
+
+### Streaming presence
+
+Neox identifies with online status and a Streaming activity named **RevenShadeX on Twitch**, linked to https://www.twitch.tv/revenshadex. Discord receives this presence on login/reconnection. It does not depend on checking whether the Twitch channel is currently live and requires no additional privileged gateway intent.

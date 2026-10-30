@@ -159,3 +159,8 @@ Validation: 892 tests passed, covering actual Discord modal submission and fresh
 ## Currency renamed to Doolar
 
 Current currency display name is Doolar. Updated command descriptions, balances, rewards, gambling, profile rendering, hunting cards, role shops, payment/trade confirmations, error messages and current README wording. Prices previously abbreviated dc now show Doolar. Existing database balances, item IDs, rules acceptance, emoji environment keys and committed coin artwork filenames remain compatible; no data conversion is required. Historical release notes above retain their original terminology.
+
+
+## Streaming presence
+
+Configured the Discord client initial presence as online with ActivityType.Streaming, activity name RevenShadeX on Twitch and URL https://www.twitch.tv/revenshadex. Applies on login/reconnection with no polling, added storage or privileged intent.

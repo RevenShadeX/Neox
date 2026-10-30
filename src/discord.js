@@ -6,6 +6,7 @@ const {
   PermissionFlagsBits,
   SlashCommandBuilder,
   Events,
+  ActivityType,
 } = require("discord.js");
 const { GameError, userId, number } = require("./game");
 const { serverPermissions } = require("./permissions");
@@ -68,6 +69,14 @@ function createClient(
   { animation = {}, profiles = {}, emojis = new EmojiResolver(), roles } = {},
 ) {
   const client = new Client({
+    presence: {
+      status: "online",
+      activities: [{
+        name: "RevenShadeX on Twitch",
+        type: ActivityType.Streaming,
+        url: "https://www.twitch.tv/revenshadex",
+      }],
+    },
     intents: [
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMessages,
