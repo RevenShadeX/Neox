@@ -93,6 +93,7 @@ const commands = {
     description: "50/50 coin flip; 2× total payout",
   },
   slots: { usage: "amount", description: "Spin three reels" },
+  dice: { aliases: ["highlow"], usage: "amount|all|half high|low", description: "Guess a six-sided dice roll: high 4–6 or low 1–3" },
   prefix: {
     usage: "new-prefix",
     description: "Set server prefix (Manage Server)",
@@ -166,6 +167,7 @@ const argumentCounts = {
   cancel: [1, 1],
   cf: [2, 2],
   slots: [1, 1],
+  dice: [2, 2],
   prefix: [1, 1],
   event: [0, 0],
   profile: [0, 1],
