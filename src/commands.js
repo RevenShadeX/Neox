@@ -64,6 +64,7 @@ const commands = {
     description: "Monster catalogue and probabilities",
   },
   sacrifice: { aliases: ["sc", "nsc"], usage: "monster-id|all|rarity [quantity]", description: "Sacrifice duplicate monsters for Rift Essence" },
+  repair: { usage: "gear-id|all", description: "Restore damaged equipment using Dark Coins" },
   infuse: { usage: "armor-gear-id [essence]", description: "Use Rift Essence to increase armor defense (max +200)" },
   sellanimals: {
     aliases: ["release", "sellmonsters", "sell", "s"],
@@ -190,6 +191,7 @@ const argumentCounts = {
   zoo: [0, 1],
   animals: [0, 1],
   sacrifice: [1, 2],
+  repair: [1, 1],
   infuse: [1, 2],
   sellanimals: [1, 2],
   huntstats: [0, 0],
