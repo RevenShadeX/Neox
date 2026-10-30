@@ -1,6 +1,10 @@
 "use strict";
 
 const commands = {
+  rules: { description: "Read Neox game rules and currency policy" },
+  agree: { description: "Accept the game rules to start playing" },
+  decline: { description: "Decline game rules and keep gameplay locked" },
+  duel: { usage: "@user amount|accept|decline", description: "Challenge a server member to a fair dice duel" },
   help: { usage: "[command]", description: "Command guide" },
   cash: {
     aliases: ["balance", "bal", "wallet"],
@@ -125,6 +129,10 @@ const commands = {
   event: { description: "Current global hunting event" },
 };
 const argumentCounts = {
+  rules: [0, 0],
+  agree: [0, 0],
+  decline: [0, 0],
+  duel: [1, 2],
   help: [0, 1],
   cash: [0, 0],
   deposit: [1, 1],
