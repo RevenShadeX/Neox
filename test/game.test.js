@@ -88,14 +88,11 @@ test("insufficient and overflow equipment payments roll back both accounts", (t)
   assert.throws(() => f.run("accept", ["1"]), /enough/);
   assert.equal(f.game.player(A).wallet, before);
 });
-test("payment waits for confirmation and cancellation moves no coins", (t) => {
+test("direct currency gifting is disabled without changing either player balance", (t) => {
   const f = fixture(t);
   f.run("cash");
   f.run("cash", [], B);
-  const payment = f.run("pay", [B, "200"]);
-  assert.equal(f.game.player(A).wallet, 500);
-  assert.equal(f.game.player(B).wallet, 500);
-  f.game.interact(require("../src/ui").cid(payment.presentation.session, "cancel"), {}, { userId: A, guildId: payment.presentation.session.guild, requestId: "900000000000004444" });
+  assert.throws(() => f.run("pay", [B, "200"]), /gifting is disabled/);
   assert.equal(f.game.player(A).wallet, 500);
   assert.equal(f.game.player(B).wallet, 500);
 });
@@ -456,10 +453,10 @@ test("prefix and slash adapters call the same engine and enforce permissions", a
   await new Promise((resolve) => setImmediate(resolve));
   assert.match(replies[0].content, /1,700/);
 });
-test("unconfirmed payment cannot manufacture starting balances for arbitrary recipient IDs", (t) => {
+test("payment cannot manufacture starting balances for arbitrary recipient IDs", (t) => {
   const f = fixture(t);
   f.run("cash");
-  assert.equal(f.run("pay", [B, "1"]).presentation.kind, "panel");
+  assert.throws(() => f.run("pay", [B, "1"]), /gifting is disabled/);
   assert.equal(f.game.player(A).wallet, 500);
   assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM players").get().n, 1);
 });
