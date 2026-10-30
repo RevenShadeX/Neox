@@ -260,7 +260,7 @@ class Game {
       "SELECT * FROM effects WHERE user=? AND expires>? AND uses>0",
     )
       .all(id, this.clock())
-      .map((e) => ({ ...C.gems.find((g) => g.id === e.item), ...e }));
+      .map((e) => ({ ...C.gems.find((g) => g.id === e.item.replace(/-(50|100|500|1000)$/, "")), ...e }));
   }
   bonus(id) {
     return Object.fromEntries(this.active(id).map((e) => [e.kind, e.bonus]));
@@ -680,7 +680,7 @@ class Game {
             "SELECT item,qty FROM inventory WHERE user=? AND kind='gem' ORDER BY item",
           )
             .all(id)
-            .map((g) => `${g.item} ×${g.qty}`)
+            .map((g) => `${g.item} ×${g.qty}${/-(50|100|500|1000)$/.test(g.item) ? ` • ${g.item.split("-").pop()} uses` : ""}`)
             .join("\n") || "No gems."
         }\nActive:\n${
           this.active(id)
@@ -691,16 +691,18 @@ class Game {
             .join("\n") || "None"
         }\nOne per category; expiry and remaining hunts both apply. Hunting gems add 1/2/3 draws by tier. Event gems improve rare tier weights; all weights are normalized.`;
       case "activate": {
-        const g = find(C.gems, a[0]);
+        const gemId = a[0];
+        const g = find(C.gems, gemId.replace(/-(50|100|500|1000)$/, ""));
+        const durability = Number(gemId.match(/-(50|100|500|1000)$/)?.[1] || g.uses);
         assert(
           !this.active(id).some((e) => e.kind === g.kind),
           "That gem category is already active.",
         );
-        this.item(id, "gem", g.id, -1);
+        this.item(id, "gem", gemId, -1);
         this.sql(
           "INSERT INTO effects(user,kind,item,expires,uses) VALUES(?,?,?,?,?) ON CONFLICT(user,kind) DO UPDATE SET item=excluded.item,expires=excluded.expires,uses=excluded.uses",
-        ).run(id, g.kind, g.id, this.clock() + g.duration, g.uses);
-        return `Activated ${g.name}: ${g.uses} hunts or ${g.duration / 3600000} hours, whichever ends first.`;
+        ).run(id, g.kind, gemId, this.clock() + g.duration, durability);
+        return `Activated ${g.name}: ${durability} hunts or ${g.duration / 3600000} hours, whichever ends first.`;
       }
       case "craft":
       case "upgrade": {
@@ -891,8 +893,10 @@ class Game {
                         [3, 5],
                       ]);
                 const g = this.rng.pick(C.gems.filter((g) => g.tier === tier));
-                this.item(id, "gem", g.id, 1);
-                add(g.id);
+                const durability = this.rng.weighted([[50, 60], [100, 28], [500, 10], [1000, 2]]);
+                const variant = `${g.id}-${durability}`;
+                this.item(id, "gem", variant, 1);
+                add(`${g.name} • ${durability} uses`);
               } else {
                 const tier = this.rng.weighted(
                   b.tierWeights
