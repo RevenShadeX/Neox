@@ -243,6 +243,7 @@ class Game {
       const b = C.equipment.find((e) => e.id === g.item);
       attack += b.attack + 2 * (g.level - 1) + g.enhance * 3;
       defense += b.defense + (g.level - 1) + g.enhance * 2;
+      if (g.slot === "armor") defense += this.sql("SELECT defense FROM armor_infusions WHERE gear=?").get(g.id)?.defense || 0;
       abilities.push(b.ability);
     }
     const p = this.player(id);
@@ -585,6 +586,39 @@ class Game {
           a[0],
         );
       }
+      case "sacrifice": {
+        assert(a[0], "Usage: sacrifice monster-id|all [quantity]");
+        const rows = a[0] === "all"
+          ? this.sql("SELECT item,qty FROM inventory WHERE user=? AND kind='animal'").all(id)
+          : [{ item: find(C.animals, a[0]).id, qty: this.qty(id, "animal", a[0]) }];
+        let total = 0, sacrificed = 0;
+        for (const row of rows) {
+          const animal = find(C.animals, row.item);
+          const qty = a[0] === "all" ? Math.max(0, row.qty - 1) : a[1] ? n(a[1], 1, 1000000) : 1;
+          if (!qty) continue;
+          assert(qty <= row.qty, "Not enough monsters.");
+          const essence = [1, 2, 4, 8, 16, 32, 64, 128][animal.tier] * qty;
+          assert(Number.isSafeInteger(total + essence), "Essence amount too large.");
+          total += essence;
+          sacrificed += qty;
+          this.item(id, "animal", animal.id, -qty);
+        }
+        assert(sacrificed > 0, "No monsters available to sacrifice.");
+        this.item(id, "essence", "rift", total);
+        return `**RIFT ALTAR • SACRIFICE COMPLETE**\nSacrificed: **${fmt(sacrificed)} monsters**\nGained: **${fmt(total)} Rift Essence**\n\nUse \`${this.getPrefix(ctx.guildId)} infuse armor-id amount\` to permanently strengthen armor.\nSacrifice all preserves one of each species.`;
+      }
+      case "infuse": {
+        const g = this.gear(id, a[0]);
+        assert(g.base.slot === "armor", "Only armor can be infused.");
+        assert(!this.locked(g.id), "Cancel the trade offer first.");
+        const current = this.sql("SELECT defense FROM armor_infusions WHERE gear=?").get(g.id)?.defense || 0;
+        assert(current < 200, "This armor has reached its +200 infusion limit.");
+        const amount = a[1] ? n(a[1], 1, 200) : 1;
+        assert(current + amount <= 200, `Only ${200 - current} infusion points remain.`);
+        this.item(id, "essence", "rift", -amount);
+        this.sql("INSERT INTO armor_infusions(gear,defense) VALUES(?,?) ON CONFLICT(gear) DO UPDATE SET defense=defense+excluded.defense").run(g.id, amount);
+        return `**ARMOR INFUSION SUCCESS**\n#${g.id} • ${g.base.name} [${g.base.rarity}]\nBase defense: **${g.base.defense}**\nInfusion: **+${current + amount}/200 DEF**\nTotal armor defense: **${g.base.defense + (g.level - 1) + g.enhance * 2 + current + amount}**\nRift Essence used: **${amount}**\n\nA higher-rarity armor starts with stronger base stats and can also be infused.`;
+      }
       case "sellanimals": {
         assert(a[0], "Usage: sellmonsters monster-id|all [quantity]");
         assert(
@@ -742,7 +776,7 @@ class Game {
       }
       case "equipment": {
         const s = this.stats(id);
-        return `Attack ${s.attack} • Defense ${s.defense}\n${s.rows.map((g) => `#${g.id} ${g.item} L${g.level} +${g.enhance} [${g.slot}]`).join("\n") || "No equipment."}\nAbilities: ${s.abilities.join(", ") || "none"}\nUpgrades: xp1 + 250 × tier × current level Dark Coins. Enhancement: lucky1 × next enhancement + 500 × next enhancement Dark Coins. Craft: currency1 × max(1, rarity index) + 70% shop price.`;
+        return `Attack ${s.attack} • Defense ${s.defense}\n${s.rows.map((g) => `#${g.id} ${g.item} L${g.level} +${g.enhance} [${g.slot}]${g.slot === "armor" ? ` • Infused +${this.sql("SELECT defense FROM armor_infusions WHERE gear=?").get(g.id)?.defense || 0}/200 DEF` : ""}`).join("\n") || "No equipment."}\nAbilities: ${s.abilities.join(", ") || "none"}\nUpgrades: xp1 + 250 × tier × current level Dark Coins. Enhancement: lucky1 × next enhancement + 500 × next enhancement Dark Coins. Craft: currency1 × max(1, rarity index) + 70% shop price.`;
       }
       case "equip": {
         const g = this.gear(id, a[0]);
@@ -771,7 +805,7 @@ class Game {
         return rows
           .map(
             (g) =>
-              `#${g.id} ${g.base.name} [${g.base.rarity}] L${g.level} +${g.enhance}\nATK ${g.base.attack + 2 * (g.level - 1) + g.enhance * 3} • DEF ${g.base.defense + g.level - 1 + g.enhance * 2} • ${g.base.ability}`,
+              `#${g.id} ${g.base.name} [${g.base.rarity}] L${g.level} +${g.enhance}\nATK ${g.base.attack + 2 * (g.level - 1) + g.enhance * 3} • DEF ${g.base.defense + g.level - 1 + g.enhance * 2 + (g.base.slot === "armor" ? (this.sql("SELECT defense FROM armor_infusions WHERE gear=?").get(g.id)?.defense || 0) : 0)} • ${g.base.ability}`,
           )
           .join("\nversus\n");
       }
