@@ -115,12 +115,6 @@ class Economy {
       player.wallet + worst - wager <= MAX,
       "Wallet limit reached for potential payout.",
     );
-    const balance = this.treasury();
-    assert(
-      balance >= worst - wager,
-      "The treasury cannot fund this potential payout. No wager was deducted.",
-    );
-    assert(balance <= TREASURY_MAX - wager, "Treasury limit reached.");
     const result = draw();
     assert(
       Number.isSafeInteger(result.multiplier) &&
@@ -130,7 +124,17 @@ class Economy {
     );
     const payout = wager * result.multiplier;
     this.adjust(user, -wager, `${reason} wager`);
-    this.treasuryChange(wager - payout);
+    // Casino settlement is issued/consumed by Neox, independent of player funds.
+    const net = payout - wager;
+    if (net)
+      this.game
+        .sql("INSERT INTO economy_events(kind,amount,source,at) VALUES(?,?,?,?)")
+        .run(
+          net > 0 ? "mint" : "consume",
+          Math.abs(net),
+          `${reason} settlement`,
+          this.game.clock(),
+        );
     if (payout) this.adjust(user, payout, `${reason} payout`);
     this.game
       .sql(

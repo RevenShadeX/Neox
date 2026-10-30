@@ -75,3 +75,10 @@ No live Discord server or Wispbyte account was used. Live token, role permission
 Explicit owner/Administrator authorization is shared by prefix, slash and component routes. Each server retains its own chosen prefix; 1–16 non-space symbols/letters/emoji are supported, and changing one server does not affect another. Prefix startup and command validation share the same rules. Added integration coverage proves an owner can change the prefix and a normal member can purchase that server’s listed role through automatic bot assignment. Current verification: 773 tests passed, 0 failed; 44 JavaScript syntax checks and gameplay smoke check passed.
 
 Additional files: `src/permissions.js`, `src/prefix.js`, `test/server-settings.test.js`; integration changes in `src/discord.js`, `src/game.js`, `src/runtime.js`, and README.
+
+
+## Casino payout policy correction
+
+Supersedes the treasury-backed casino policy above: coinflip, dice and slots now settle directly against Neox. They never require or change the shared treasury or other players' funds. Net winnings are audited as issuance and net losses as consumption. Existing balances and treasury records are preserved without a migration. Atomic wager/payout/history, maximum wagers, wallet capacity, secure randomness, cooldowns and request deduplication remain enforced. Player-to-player duels retain their consent-based transfers.
+
+Validation: all 773 tests pass, including empty-treasury games, all coinflip/dice outcomes, slot jackpot/pair/loss, concurrent winners, and modal submission. Game smoke checks and syntax checks for all 44 JavaScript files pass.

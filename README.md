@@ -37,21 +37,21 @@ For a 512 MB host, optionally set `NODE_OPTIONS=--max-old-space-size=192` to lea
 
 ## Economy and funding policy
 
-**Only daily rewards, monster hunting and global level-up rewards create new coins.** Minting is centrally scoped and transaction-guarded. New accounts start with **zero** coins; existing balances are preserved. Daily pays 1,200 coins and a daily cache every 24 hours. Hunting rewards depend on rarity, with a 20-second cooldown. Global level rewards use the configured curve below.
+**Daily rewards, monster hunting, global level-up rewards and casino winnings create coins.** Minting is centrally scoped and transaction-guarded. New accounts start with **zero** coins; existing balances are preserved. Daily pays 1,200 coins and a daily cache every 24 hours. Hunting rewards depend on rarity, with a 20-second cooldown. Global level rewards use the configured curve below.
 
 Weekly gives two gem caches, work gives three Companion Rations, quests grant XP, battles/bosses grant progression, and collection milestones grant item caches. Releasing monsters, disposing of equipment and opening loot caches give **no direct currency**. Monster threat/value scores are collection metadata, not redemption prices. `pay` remains a compatibility command that explicitly rejects gifting. Equipment trades transfer existing coins for equipment. Own-wallet bank deposits/withdrawals remain available.
 
-### Treasury-backed gambling
+### Bot-paid gambling
 
-The global treasury starts at **zero**, including when migrating an existing database. There is no seed-balance setting or hidden mint. Global item purchases, crafting/upgrades/enhancements and explicit `n treasury fund amount` contributions move **existing wallet coins** into the treasury. Contributions are voluntary and non-refundable. A new player can claim daily, buy supplies, or explicitly fund the treasury before gambling. `n treasury` shows available funds.
+Neox pays casino winnings directly. Coinflip, dice and slots never require, debit or credit the global treasury or another player's balance. Existing treasury records and the legacy contribution command remain available for compatibility; contributions are not needed to gamble.
 
-Every wager checks the wallet, integer bounds and treasury **before sampling randomness or deducting coins**. Coinflip/dice require treasury funds covering one additional wager; slots require nine additional wagers for a possible 10× payout. Incoming stake may cover part of the payout. Wallet capacity for the maximum possible payout is checked too. Insufficient reserves reject the entire wager. Outcomes are never predicted or manipulated to fit the budget.
+Every wager checks the player's balance, bet limit and wallet capacity for the maximum payout before sampling randomness or deducting coins. Outcomes remain fair and independent of balances. Net casino winnings are audited as newly issued coins; net losses as consumed coins.
 
 - Coinflip: `n cf 100 heads`, `ncf half t`, `n coin flip all h`, or `n cf` for Heads/Tails buttons and a wager modal. Fair `crypto.randomInt(2)` outcome; a win returns 2× stake, a loss 0. Compact messages use the actual display name and original spinning coin artwork, then edit the result after roughly two seconds. Configured emojis or Unicode/text fallbacks work without reaction menus.
 - Dice: `n dice 100 high` or `n dice half low`. One fair six-sided die; high is 4–6, low 1–3, each 50%. Win returns 2× stake, loss 0.
 - Slots: `n slots 100`. Six independent equiprobable symbols on each reel: triple 6/216 pays 10×, exactly one pair 90/216 returns 1×, otherwise 120/216 returns 0. RTP 69.44%.
 
-`all` means `min(wallet, MAX_BET)`; `half` means `min(floor(wallet/2), MAX_BET)` where supported. Slots accepts numeric wagers. Default maximum bet is 100,000; bets must be positive whole affordable amounts. Games share a five-second cooldown. Stake, treasury movement, payout, history and processed Discord ID commit in a single `BEGIN IMMEDIATE` transaction. A winning wager never creates currency. Coins held in role escrow/refund credits are not available for gambling.
+`all` means `min(wallet, MAX_BET)`; `half` means `min(floor(wallet/2), MAX_BET)` where supported. Slots accepts numeric wagers. Default maximum bet is 100,000; bets must be positive whole affordable amounts. Games share a five-second cooldown. Stake, payout, audit history and processed Discord ID commit in a single `BEGIN IMMEDIATE` transaction. Neox issues the coins needed for winning payouts. Coins held in role escrow/refund credits are not available for gambling.
 
 ## Rules, parser and commands
 
@@ -74,7 +74,7 @@ Prefix and slash commands use the same services. Canonical names are registered 
 | pay | @user amount | Direct currency gifting is disabled |
 | weekly | — | Claim weekly item supplies |
 | work | — | Work for companion supplies |
-| treasury | [fund amount] | View or fund the existing-coin gambling treasury |
+| treasury | [fund amount] | View or fund the legacy treasury (not needed for gambling) |
 | roleshop | — | Open this server role shop |
 | roleshopadmin | — | Manage this server role shop (Manage Server) |
 | rolepurchases | — | Your recent role purchase and recovery statuses |
@@ -198,6 +198,6 @@ node scripts/benchmark.js
 node scripts/benchmark-profiles.js
 ```
 
-Tests include real SQLite transactions and worker concurrency, old/new schemas, all aliases, rules gating, treasury conservation for every outcome, shop ownership/modals/rollback, duels and consent, role escrow/timeout/restart/refund recovery, native profile PNG generation and mocked Discord API/interaction failures. `test-support/legacy-game.cjs` seeds explicit grandfathered test fixtures; production never imports it. Final measured test counts and release SHA are in the PR/commit and release report. Offline tests cannot certify your live token, Discord permissions or Wispbyte account settings.
+Tests include real SQLite transactions and worker concurrency, old/new schemas, all aliases, rules gating, bot-paid settlements for every outcome, shop ownership/modals/rollback, duels and consent, role escrow/timeout/restart/refund recovery, native profile PNG generation and mocked Discord API/interaction failures. `test-support/legacy-game.cjs` seeds explicit grandfathered test fixtures; production never imports it. Final measured test counts and release SHA are in the PR/commit and release report. Offline tests cannot certify your live token, Discord permissions or Wispbyte account settings.
 
 Core modules: `game.js` shared command services; `economy.js` mint/transfer/treasury invariants; `sessions.js` persistent owner/revision state; `ui.js` Discord component builders; `duels.js` atomic challenges/matchmaking; `role-shop.js` escrow/recovery; `discord-roles.js` authoritative role API adapter; `discord.js` transport and acknowledgements; `runtime.js` validated startup/shutdown; `migration-v3.js` additive storage; `leveling.js` exact curves; `profiles.js` bounded renderer. The optional Python coin-art authoring tool is not a runtime dependency.

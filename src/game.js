@@ -359,9 +359,9 @@ class Game {
           );
           const amount = n(a[1]);
           this.economy.spend(id, amount, "voluntary treasury funding");
-          return `Moved ${fmt(amount)} existing Dark Coins to the shared gambling treasury. This contribution is not refundable.`;
+          return `Moved ${fmt(amount)} existing Dark Coins to the legacy treasury. This contribution is not refundable.`;
         }
-        return `Global gambling treasury: ${fmt(this.economy.treasury())} Dark Coins. Starts at zero; funded only by existing coins from purchases, costs and voluntary contributions. No real-world value.`;
+        return `Legacy treasury (not used for gambling): ${fmt(this.economy.treasury())} Dark Coins. Starts at zero; funded only by existing coins from purchases, costs and voluntary contributions. No real-world value.`;
       }
       case "refunds":
         return `Returned ${fmt(this.roleShop.claimRefund(id))} held refund Dark Coins to your wallet.`;
@@ -471,7 +471,7 @@ class Game {
         )
           .safeIntegers(true)
           .get().n;
-        return `${fmt(t.players)} players • ${fmt(t.wallet)} wallet Dark Coins • ${fmt(t.bank)} bank Dark Coins\nTreasury: ${fmt(this.economy.treasury())} • role escrow: ${fmt(held)} • held refunds: ${fmt(refunds)}\nNew coins: daily, monster hunting and global levels only. No real-world value.`;
+        return `${fmt(t.players)} players • ${fmt(t.wallet)} wallet Dark Coins • ${fmt(t.bank)} bank Dark Coins\nTreasury: ${fmt(this.economy.treasury())} • role escrow: ${fmt(held)} • held refunds: ${fmt(refunds)}\nNew coins: daily, monster hunting, global levels and casino winnings. No real-world value.`;
       }
       case "leaderboard": {
         const mode = a[0] || "wealth";
@@ -1139,7 +1139,7 @@ class Game {
               : 0;
           return { reels, multiplier };
         });
-        return `${settled.reels.map((r) => ["🌑", "🔮", "🦇", "💎", "⚔️", "👑"][r]).join(" ")}\nReturned ${fmt(settled.payout)} Dark Coins; net ${fmt(settled.payout - wager)}. 216 equiprobable outcomes: triple 6/216 pays 10×; pair 90/216 returns 1×; other 120/216 pays 0. RTP 69.44%. All payouts treasury-backed.`;
+        return `${settled.reels.map((r) => ["🌑", "🔮", "🦇", "💎", "⚔️", "👑"][r]).join(" ")}\nReturned ${fmt(settled.payout)} Dark Coins; net ${fmt(settled.payout - wager)}. 216 equiprobable outcomes: triple 6/216 pays 10×; pair 90/216 returns 1×; other 120/216 pays 0. RTP 69.44%. Winnings paid directly by Neox.`;
       }
       case "prefix": {
         assert(ctx.guildId, "Use this in a server.");

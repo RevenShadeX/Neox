@@ -238,37 +238,16 @@ for (const [command, args] of [
   ["dice", ["100", "high"]],
   ["slots", ["100"]],
 ])
-  test(`unfunded ${command} rejects before money, cooldown or randomness changes`, (t) => {
-    let draws = 0;
-    const f = fixture(t, {
-      rng: {
-        ...secure,
-        coinflip: () => {
-          draws++;
-          return 1;
-        },
-        int: () => {
-          draws++;
-          return 1;
-        },
-      },
-    });
+  test(`unfunded ${command} pays directly without using treasury`, (t) => {
+    const f = fixture(t, { rng: { ...secure, coinflip: () => 1, int: () => 4 } });
     f.seed();
-    const before = f.total(),
-      wallet = f.g.player(A).wallet;
-    assert.throws(() => f.run(command, args), /treasury cannot fund/);
-    assert.equal(f.total(), before);
-    assert.equal(f.g.player(A).wallet, wallet);
-    assert.equal(draws, 0);
-    assert.equal(
-      f.store
-        .sql("SELECT COUNT(*) AS n FROM cooldowns WHERE command='gamble'")
-        .get().n,
-      0,
-    );
+    f.run(command, args);
+    assert.equal(f.g.economy.treasury(), 0);
+    assert.equal(f.g.player(A).wallet, command === "slots" ? 10900 : 10100);
+    assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM wager_history").get().n, 1);
   });
 for (const outcome of [0, 1])
-  test(`coinflip outcome ${outcome} redistributes existing treasury coins`, (t) => {
+  test(`coinflip outcome ${outcome} pays independently of treasury`, (t) => {
     const f = fixture(t, { rng: { ...secure, coinflip: () => outcome } });
     f.seed();
     f.run("treasury", ["fund", "1000"]);
@@ -276,19 +255,19 @@ for (const outcome of [0, 1])
       cash = f.g.player(A).wallet,
       treasury = f.g.economy.treasury();
     const result = f.run("cf", ["100", "heads"]);
-    assert.equal(f.total(), before);
+    assert.equal(f.total(), before + BigInt(outcome ? 100 : -100));
     assert.equal(f.g.player(A).wallet, cash + (outcome ? 100 : -100));
-    assert.equal(f.g.economy.treasury(), treasury + (outcome ? -100 : 100));
+    assert.equal(f.g.economy.treasury(), treasury);
     assert.equal(result.presentation.payout, outcome ? 200 : 0);
   });
 for (const roll of [1, 2, 3, 4, 5, 6])
-  test(`dice roll ${roll} is fair high/low and treasury backed`, (t) => {
+  test(`dice roll ${roll} is fair high/low and bot paid`, (t) => {
     const f = fixture(t, { rng: { ...secure, int: () => roll } });
     f.seed();
     f.run("treasury", ["fund", "1000"]);
     const before = f.total();
     f.run("dice", ["100", "high"]);
-    assert.equal(f.total(), before);
+    assert.equal(f.total(), before + BigInt(roll >= 4 ? 100 : -100));
     assert.equal(f.g.player(A).wallet, roll >= 4 ? 9100 : 8900);
   });
 for (const reels of [
@@ -296,23 +275,23 @@ for (const reels of [
   [0, 0, 1],
   [0, 1, 2],
 ])
-  test(`slots ${reels.join("-")} conserves coins for jackpot/pair/loss`, (t) => {
+  test(`slots ${reels.join("-")} settles jackpot/pair/loss directly`, (t) => {
     let i = 0;
     const f = fixture(t, { rng: { ...secure, int: () => reels[i++ % 3] } });
     f.seed();
     f.run("treasury", ["fund", "1000"]);
     const before = f.total();
     f.run("slots", ["100"]);
-    assert.equal(f.total(), before);
     const payout =
       reels[0] === reels[2] ? 1000 : reels[0] === reels[1] ? 100 : 0;
     assert.equal(f.g.player(A).wallet, 8900 + payout);
+    assert.equal(f.total(), before + BigInt(payout - 100));
   });
-test("slots require nine wagers in treasury even if the actual roll would lose", (t) => {
+test("slots never require or modify treasury reserves", (t) => {
   const f = fixture(t);
   f.seed();
   f.run("treasury", ["fund", "899"]);
-  assert.throws(() => f.run("slots", ["100"]), /treasury cannot fund/);
+  f.run("slots", ["100"]);
   assert.equal(f.g.economy.treasury(), 899);
 });
 test("successful gambling requests cannot be replayed and shared cooldown cannot be bypassed", (t) => {
@@ -333,7 +312,7 @@ test("successful gambling requests cannot be replayed and shared cooldown cannot
     1,
   );
 });
-test("a funded level-up mints only the level reward, not the gambling payout", (t) => {
+test("a level-up audits casino winnings separately from level rewards", (t) => {
   const f = fixture(t);
   f.seed();
   f.run("treasury", ["fund", "1000"]);
@@ -341,9 +320,9 @@ test("a funded level-up mints only the level reward, not the gambling payout", (
   const before = f.total();
   const result = f.run("cf", ["100", "h"]);
   assert.equal(result.levelUp.reward, 10000);
-  assert.equal(f.total() - before, 10000n);
+  assert.equal(f.total() - before, 10100n);
   assert.equal(
-    f.store.sql("SELECT source FROM economy_events WHERE kind='mint'").get()
+    f.store.sql("SELECT source FROM economy_events WHERE kind='mint' AND source='level rewards'").get()
       .source,
     "level rewards",
   );
@@ -1049,7 +1028,7 @@ test("role worker shutdown preserves ambiguous escrow for restart instead of ref
   });
   assert.equal(await next.process(p.rolePurchase), "delivered");
 });
-test("concurrent funded winners cannot overdraw the treasury", async (t) => {
+test("concurrent winners are all paid without drawing on treasury", async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "neox-treasury-race-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const file = path.join(dir, "db.sqlite"),
@@ -1076,9 +1055,9 @@ test("concurrent funded winners cannot overdraw the treasury", async (t) => {
         }),
     ),
   );
-  assert.equal(results.filter(Boolean).length, 1);
-  assert.equal(f.g.economy.treasury(), 0);
-  assert.equal(f.total(), before);
+  assert.equal(results.filter(Boolean).length, 3);
+  assert.equal(f.g.economy.treasury(), 100);
+  assert.equal(f.total(), before + 300n);
 });
 test("concurrent confirmations for one shop session purchase exactly once", async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "neox-shop-race-"));
@@ -1228,7 +1207,7 @@ test("slash rules, shop and coinflip commands use valid persisted component pane
     assert.ok(payload.components?.length > 0);
   }
 });
-test("coinflip button opens an owner-bound modal, acknowledges once, and submits treasury-backed bet", async (t) => {
+test("coinflip button opens an owner-bound modal, acknowledges once, and submits bot-paid bet", async (t) => {
   const f = fixture(t);
   f.seed();
   f.run("treasury", ["fund", "1000"]);
@@ -1263,7 +1242,7 @@ test("coinflip button opens an owner-bound modal, acknowledges once, and submits
   assert.equal(valid.calls[0][0], "deferReply");
   assert.equal(valid.calls.filter((c) => c[0] === "editReply").length, 2);
   assert.equal(f.g.player(A).wallet, 9100);
-  assert.equal(f.g.economy.treasury(), 900);
+  assert.equal(f.g.economy.treasury(), 1000);
 });
 test("modal submits after rules revocation return working rules controls without charging", async (t) => {
   const f = fixture(t);

@@ -51,7 +51,7 @@ function panel(game, s) {
   } else if (s.kind === "coinflip") {
     card = embed(
       "Dark Coinflip",
-      "Choose a side, then enter your wager in the modal.\n\nHeads / tails: **50% each**. A win returns **2×** including stake; a loss returns **0**. Both outcomes are treasury-backed before a wager is accepted.",
+      "Choose a side, then enter your wager in the modal.\n\nHeads / tails: **50% each**. A win returns **2×** including stake; a loss returns **0**. Winnings are paid directly by Neox; no treasury funding is required.",
     );
     components = [
       row(
