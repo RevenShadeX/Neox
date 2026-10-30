@@ -144,7 +144,7 @@ function createClient(
       game.getPrefix(message.guildId),
     );
     if (!parsed) return;
-    if (parsed.command === "cf" && parsed.args.length === 0) {
+    if (registry.resolve(parsed.command) === "cf" && parsed.args.length === 0) {
       await message.channel.send(coinflipPanel(message.author.id));
       return;
     }
@@ -251,9 +251,9 @@ function createClient(
       try {
         const action = interaction.customId.endsWith(":accept") ? "agree" : "decline";
         const result = game.executeResult(action, [], {userId: interaction.user.id, guildId: interaction.guildId, requestId: interaction.id});
-        await interaction.reply({content: result.content, ephemeral: true, allowedMentions});
+        await interaction.reply({content: result.content, flags: 64, allowedMentions});
       } catch (err) {
-        if (!interaction.replied) await interaction.reply({content: errorText(err), ephemeral: true});
+        if (!interaction.replied) await interaction.reply({content: errorText(err), flags: 64});
       }
       return;
     }
@@ -262,7 +262,7 @@ function createClient(
       !registry.resolve(interaction.commandName)
     )
       return;
-    if (interaction.commandName === "cf" && !interaction.options.getString("args")) {
+    if (registry.resolve(interaction.commandName) === "cf" && !interaction.options.getString("args")) {
       await interaction.reply(coinflipPanel(interaction.user.id));
       return;
     }
