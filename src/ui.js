@@ -13,6 +13,7 @@ const {
 const { items, PAGE } = require("./sessions");
 const { markdownName } = require("./text");
 const C = require("./content");
+const { itemIcon } = require("./item-display");
 const RED = 0xb91c32,
   allowedMentions = { parse: [], repliedUser: false };
 const row = (...components) =>
@@ -93,7 +94,7 @@ function panel(game, s) {
       const shown = catalog.slice(page * PAGE, (page + 1) * PAGE);
       card = embed(
         "🛍️ Global Shop",
-        `**${v.category.toUpperCase()}** • Page ${page + 1}/${pages}\n\n${shown.map((x) => `${markdownName(x.name || x.id)} • **${x.price.toLocaleString("en-US")} Dark Coins**`).join("\n")}\n\nChoose an item, enter a quantity, then confirm your purchase.`,
+        `**${v.category.toUpperCase()}** • Page ${page + 1}/${pages}\n\n${shown.map((x) => `${itemIcon(x)} ${markdownName(x.name || x.id)} • **${x.price.toLocaleString("en-US")} Dark Coins**`).join("\n")}\n\nChoose an item, enter a quantity, then confirm your purchase.`,
       );
       components = [
         category,
@@ -104,6 +105,7 @@ function panel(game, s) {
             .addOptions(
               shown.map((x) => ({
                 label: (x.name || x.id).slice(0, 100),
+                emoji: itemIcon(x),
                 value: x.id,
                 description: `${x.price.toLocaleString("en-US")} Dark Coins`,
               })),
@@ -126,7 +128,7 @@ function panel(game, s) {
               : "\nCompanion training supplies.";
       card = embed(
         v.stage === "confirm" ? "Confirm Purchase" : "Item Information",
-        `**${markdownName(selected.name || selected.id)}**\nUnit price: **${v.price.toLocaleString("en-US")} Dark Coins**${details}${v.stage === "confirm" ? `\n\nQuantity: ${v.quantity}\nTotal: **${(v.price * v.quantity).toLocaleString("en-US")} Dark Coins**` : "\n\nChoose a quantity before confirming."}`,
+        `${itemIcon(selected)} **${markdownName(selected.name || selected.id)}**\nUnit price: **${v.price.toLocaleString("en-US")} Dark Coins**${details}${v.stage === "confirm" ? `\n\nQuantity: ${v.quantity}\nTotal: **${(v.price * v.quantity).toLocaleString("en-US")} Dark Coins**` : "\n\nChoose a quantity before confirming."}`,
       );
       components = [
         category,
@@ -172,7 +174,7 @@ function panel(game, s) {
     } else if (v.stage === "detail" && v.role) {
       card = embed(
         admin ? "Manage Role Listing" : "Confirm Role Purchase",
-        `**${markdownName(v.name || "Role")}**\nPrice: **${v.price.toLocaleString("en-US")} Dark Coins**\n\n${admin ? "Edit the price or remove this server’s listing." : "Payment is held in escrow until role delivery or a safe refund. Role purchases consume existing coins."}`,
+        `🏷️ **${markdownName(v.name || "Role")}**\nPrice: **${v.price.toLocaleString("en-US")} Dark Coins**\n\n${admin ? "Edit the price or remove this server’s listing." : "Payment is held in escrow until role delivery or a safe refund. Role purchases consume existing coins."}`,
       );
       components = [
         row(
@@ -194,7 +196,7 @@ function panel(game, s) {
     } else {
       card = embed(
         admin ? "Server Role Shop Management" : "Server Role Shop",
-        `Shop: **${enabled ? "Enabled" : "Disabled"}** • Page ${page + 1}/${pages}\n\n${list.map((l) => `${markdownName(l.name)} • ${l.price.toLocaleString("en-US")} Dark Coins`).join("\n") || "No listings configured."}\n\n${admin ? "Management requires Manage Server and Manage Roles on every action." : "Only listings from this server can be purchased."}`,
+        `Shop: **${enabled ? "Enabled" : "Disabled"}** • Page ${page + 1}/${pages}\n\n${list.map((l) => `🏷️ ${markdownName(l.name)} • ${l.price.toLocaleString("en-US")} Dark Coins`).join("\n") || "No listings configured."}\n\n${admin ? "Management requires Manage Server and Manage Roles on every action." : "Only listings from this server can be purchased."}`,
       );
       if (admin)
         components.push(
@@ -217,6 +219,7 @@ function panel(game, s) {
               .addOptions(
                 list.map((l) => ({
                   label: l.name.slice(0, 100),
+                  emoji: "🏷️",
                   value: l.role,
                   description: `${l.price.toLocaleString("en-US")} Dark Coins`,
                 })),
@@ -284,4 +287,47 @@ function queue(p) {
     allowedMentions,
   };
 }
-module.exports = { panel, modal, duel, queue, cid, RED, allowedMentions };
+const cardStyles = {
+  inventory: ["🎒 Inventory", 0x8b5cf6],
+  leaderboard: ["🏆 Global Leaderboard", 0xf59e0b], levels: ["🏆 Level Rankings", 0xf59e0b],
+  zoo: ["🐾 Monster Collection", 0x10b981], animals: ["📖 Monster Bestiary", 0x10b981],
+  collection: ["🏅 Collection Milestones", 0x10b981], huntstats: ["🎯 Hunting Statistics", 0x10b981],
+  gems: ["💎 Your Gems", 0x8b5cf6], equipment: ["⚔️ Your Equipment", 0x8b5cf6],
+  boxes: ["📦 Your Loot Boxes", 0x8b5cf6], boxinfo: ["📦 Loot Box Details", 0x8b5cf6],
+  pet: ["🐾 Your Companion", 0x10b981], history: ["🧾 Transaction History", 0x64748b],
+};
+function commandCards(output) {
+  const p = output.presentation;
+  const [title, color] = cardStyles[p.command] || ["⚔️ Battle", RED];
+  if (p.combat) {
+    const c = p.combat;
+    const card = embed(
+      `${p.command === "boss" ? "👹 Boss Battle" : "⚔️ Battle"} • ${c.draw ? "🤝 Draw" : c.won ? "🏆 Victory" : "💀 Defeat"}`,
+      `Opponent: **${c.enemy}**`,
+    ).setColor(c.draw ? 0xf59e0b : c.won ? 0x10b981 : RED)
+      .addFields(
+        { name: "❤️ Your health", value: `${c.hp} / 100 HP`, inline: true },
+        { name: "🛡️ Opponent health", value: `${c.enemyHP} / ${p.command === "boss" ? 160 : 100} HP`, inline: true },
+        { name: "✨ Progress", value: `+${c.xp} hunting XP`, inline: true },
+        { name: "📜 Battle rounds · You / Opponent", value: `\`\`\`\n${c.log.join("\n")}\n\`\`\`` },
+      ).setFooter({ text: "Neox • Saved equipment combat • No opponent coins taken" });
+    return [{ content: "", embeds: [card], allowedMentions }];
+  }
+  // One bounded embed per message, preserving every line of large inventories.
+  const pages = [];
+  let part = "";
+  for (const line of String(output.content).split("\n")) {
+    for (let offset = 0; offset < Math.max(1, line.length); offset += 3500) {
+      const piece = line.slice(offset, offset + 3500);
+      if (part.length + piece.length + 1 > 3800) { pages.push(part); part = ""; }
+      part += (part ? "\n" : "") + piece;
+    }
+  }
+  if (part || !pages.length) pages.push(part || "Nothing here yet.");
+  return pages.map((description, i) => ({
+    content: "", embeds: [embed(title, description).setColor(color)
+      .setFooter({ text: `Neox • ${pages.length > 1 ? `Part ${i + 1}/${pages.length} • ` : ""}Dark Coins are virtual` })],
+    allowedMentions,
+  }));
+}
+module.exports = { panel, modal, duel, queue, commandCards, cid, RED, allowedMentions };

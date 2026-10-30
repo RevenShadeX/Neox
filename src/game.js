@@ -1,5 +1,6 @@
 "use strict";
 const C = require("./content");
+const { itemIcon, inventoryLabel } = require("./item-display");
 const { validPrefix } = require("./prefix");
 const secure = require("./random");
 const { MAX } = require("./database");
@@ -145,6 +146,10 @@ class Game {
           };
         }
       }
+      if (!result.presentation && [
+        "inventory", "leaderboard", "levels", "zoo", "animals", "collection",
+        "huntstats", "gems", "boxes", "boxinfo", "equipment", "pet", "history",
+      ].includes(name)) result.presentation = { kind: "card", command: name };
       return result;
     } finally {
       this.mintScope = previous;
@@ -309,7 +314,7 @@ class Game {
     const rows = this.sql(
       "SELECT id,display_name,global_xp FROM players ORDER BY global_xp DESC,id LIMIT 10 OFFSET ?",
     ).all((page - 1) * 10);
-    return `XP • Global rankings\n${rows.map((p, i) => `${(page - 1) * 10 + i + 1}. ${markdownName(p.display_name)} • Level ${this.progression.curve.progress(p.global_xp).level} • ${fmt(p.global_xp)} total XP`).join("\n") || "No players."}\nPage ${page}`;
+    return `XP • Global rankings\n${rows.map((p, i) => `${["🥇", "🥈", "🥉"][(page - 1) * 10 + i] || "▫️"} ${(page - 1) * 10 + i + 1}. ${markdownName(p.display_name)} • Level ${this.progression.curve.progress(p.global_xp).level} • ${fmt(p.global_xp)} total XP`).join("\n") || "No players."}\nPage ${page}`;
   }
   run(name, a, p, ctx) {
     const id = p.id;
@@ -487,7 +492,7 @@ class Game {
         const rows = this.sql(
           `SELECT id,${col} AS score FROM players ORDER BY score DESC,id LIMIT 10 OFFSET ?`,
         ).all((page - 1) * 10);
-        return `🏆 **${mode.toUpperCase()} • Global rankings**\n${rows.map((r, i) => `${(page - 1) * 10 + i + 1}. <@${r.id}> — ${fmt(r.score)}`).join("\n") || "No players."}\nPage ${page}`;
+        return `🏆 **${mode.toUpperCase()} • Global rankings**\n${rows.map((r, i) => `${["🥇", "🥈", "🥉"][(page - 1) * 10 + i] || "▫️"} ${(page - 1) * 10 + i + 1}. <@${r.id}> — ${fmt(r.score)}`).join("\n") || "No players."}\nPage ${page}`;
       }
       case "hunt": {
         this.cooldown(id, "hunt", 20000);
@@ -633,14 +638,14 @@ class Game {
           .all(id)
           .map(
             (r) =>
-              `${r.kind === "animal" ? "monster" : r.kind} • ${r.item} ×${fmt(r.qty)}`,
+              `${inventoryLabel(r.kind, r.item)} ×${fmt(r.qty)}`,
           );
         rows.push(
           ...this.sql("SELECT * FROM gear WHERE user=? ORDER BY id")
             .all(id)
             .map(
               (g) =>
-                `#${g.id} ${g.item} L${g.level} +${g.enhance}${g.slot ? " [equipped]" : ""}`,
+                `${itemIcon(C.equipment.find((x) => x.id === g.item) || {})} #${g.id} ${C.equipment.find((x) => x.id === g.item)?.name || g.item} L${g.level} +${g.enhance}${g.slot ? " ✅ Equipped" : ""}`,
             ),
         );
         return `🎒 **Your inventory**\n${this.page(rows, a[0])}`;
@@ -998,7 +1003,15 @@ class Game {
             enemyId,
           );
         }
-        return `${enemy ? `Ranked spar against <@${enemyId}>` : boss ? "Boss battle against the Sovereign of the Rift" : "Expedition against a Rift Sentinel"}\n${log.join("\n")}\n${draw ? "Draw" : won ? "Victory" : "Defeat"} • +0 Dark Coins • ${won ? 35 : 15} hunting XP\nRanked sparring uses saved equipment; no opponent coins are taken.`;
+        return {
+          content: `${enemy ? `Ranked spar against <@${enemyId}>` : boss ? "Boss battle against the Sovereign of the Rift" : "Expedition against a Rift Sentinel"}\n${log.join("\n")}\n${draw ? "Draw" : won ? "Victory" : "Defeat"} • +0 Dark Coins • ${won ? 35 : 15} hunting XP\nRanked sparring uses saved equipment; no opponent coins are taken.`,
+          presentation: {
+            kind: "card", command: name,
+            combat: { won, draw, hp: Math.max(0, hp), enemyHP: Math.max(0, ehp),
+              enemy: enemy ? `<@${enemyId}>` : boss ? "Sovereign of the Rift" : "Rift Sentinel",
+              log, xp: won ? 35 : 15 },
+          },
+        };
       }
       case "trade": {
         assert(a.length === 3, "Usage: trade @user gear-id price");

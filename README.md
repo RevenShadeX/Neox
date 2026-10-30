@@ -206,3 +206,10 @@ Core modules: `game.js` shared command services; `economy.js` mint/transfer/trea
 ### Clean command presentation
 
 `level`, `rank`, and `profile` send the profile PNG alone, with no duplicate statistics message, through both prefix and slash commands. If rendering is busy or image delivery fails, Neox shows a brief retry notice instead of a wall of profile text. Main rewards, wallet/bank balances, hunting results, inventory, rankings and purchases use compact spacing and recognizable emojis. Shop buttons keep their text labels alongside emoji icons. The rules panel reflects direct bot-paid casino winnings.
+
+
+### Themed game cards and item icons
+
+Inventory, equipment, gems and loot use purple embeds; collection and companion views use green; global and XP rankings use gold with medals for the top three. Battle/boss cards use green for victory, red for defeat and amber for a draw, with health totals, hunting XP and the full round log. Both prefix aliases and slash commands share these presentations. Large descriptions split into bounded embeds without dropping entries. Level/profile cards remain image-only.
+
+Shop item names and dropdowns have matching icons by item type (weapons, armor, accessories, gems, caches and food). The item detail view uses the same icon. Server-role listings use a role tag icon. Inventory entries show readable names and retain IDs needed for commands.

@@ -220,6 +220,10 @@ function createClient(
           allowedMentions: UI.allowedMentions,
         });
       }
+    } else if (p?.kind === "card") {
+      const cards = UI.commandCards(output);
+      await transport.show(cards[0]);
+      for (const card of cards.slice(1)) await transport.extra(card);
     } else {
       const parts = chunks(output.content);
       await transport.show({

@@ -89,3 +89,10 @@ Validation: all 773 tests pass, including empty-treasury games, all coinflip/dic
 Level/rank/profile attachments are image-only on both transports. Rendering overload, failure and attachment rejection use short actionable notices without repeating profile statistics. Improved primary reward, balance, hunting, inventory, ranking and purchase messages; added labeled emoji shop controls and corrected the old treasury warning in the rules. No balances or progression data changed.
 
 Verification: 774 tests passed; all 44 JavaScript files passed syntax checks; game smoke checks and git diff whitespace checks passed.
+
+
+## Rich game cards and shop icons
+
+Added matching shop icons to item lists, dropdowns and purchase details, including role-listing tags. Inventory retains IDs while showing readable names and equipment icons. Shared command presentations now render themed embeds for inventory, equipment, gems, loot, collections, companions, history and rankings. Battle/boss cards include outcome coloring, health, earned hunting XP and all rounds. Prefix/slash command delivery uses the same renderer; level/profile attachments remain image-only. No economy or saved-data migration changes.
+
+Verification: 784 tests passed, including all shop categories, battle/boss summaries, inventory names, long-description limits, and both transports for inventory, battles and leaderboards. Game smoke checks and JavaScript syntax checks passed.
