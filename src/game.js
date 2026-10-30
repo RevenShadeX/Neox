@@ -1067,7 +1067,7 @@ class Game {
         let battleLoot = "";
         if (won && !draw && !enemy && this.rng.int(1, 100) <= (boss || stageBoss ? 35 : 12)) {
           this.item(id, "box", "weapon", 1);
-          battleLoot = "\\nLoot: +1 Weapon Cache (open with n open weapon)";
+          battleLoot = "\nLoot: +1 Weapon Cache (open with n open weapon)";
         }
         for (const gear of me.rows) {
           const condition = this.sql("SELECT condition FROM gear_condition WHERE gear=?").get(gear.id)?.condition ?? 100;
@@ -1103,7 +1103,7 @@ class Game {
           );
         }
         return {
-          content: `${enemy ? `Ranked spar against <@${enemyId}>` : boss ? "Boss battle against the Sovereign of the Rift" : `Expedition Stage ${stage} against ${elite ? "the Eternal Rift Sovereign" : stageBoss ? "a Rift Overlord" : "a Rift Sentinel"}`}\n${log.join("\n")}\n${draw ? "Draw" : won ? "Victory" : "Defeat"} • +0 Dark Coins • ${won ? 35 : 15} hunting XP\nRanked sparring uses saved equipment; no opponent coins are taken.\\nEquipped gear loses 1–4% condition per fight. Repair with n repair all.${battleLoot}`,
+          content: `${enemy ? `Ranked spar against <@${enemyId}>` : boss ? "Boss battle against the Sovereign of the Rift" : `Expedition Stage ${stage} against ${elite ? "the Eternal Rift Sovereign" : stageBoss ? "a Rift Overlord" : "a Rift Sentinel"}`}\n${log.join("\n")}\n${draw ? "Draw" : won ? "Victory" : "Defeat"} • +0 Dark Coins • ${won ? 35 : 15} hunting XP\nRanked sparring uses saved equipment; no opponent coins are taken.\nEquipped gear loses 1–4% condition per fight. Repair with n repair all.${battleLoot}`,
           presentation: {
             kind: "card", command: name,
             combat: { won, draw, hp: Math.max(0, hp), enemyHP: Math.max(0, ehp),
