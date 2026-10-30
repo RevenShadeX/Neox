@@ -238,10 +238,6 @@ for (const [name, definition] of Object.entries(commands)) {
             const parsed = parsePrefix(content);
             assert.equal(parsed.command, name);
             assert.deepEqual(parsed.args, validArgs[name]);
-            if (name === "pay") {
-              assert.throws(() => f.message(content), /gifting is disabled/);
-              return;
-            }
             const result = f.message(content);
             assert.ok(result.content.length);
             if (name === "prefix")
