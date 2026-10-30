@@ -219,18 +219,24 @@ test("quest claims award XP but no direct coins", (t) => {
   assert.equal(f.total(), before);
   assert.throws(() => f.run("quest", ["claim", "hunt"]), /No completed/);
 });
-test("currency gifting is disabled while actual equipment trade payments conserve coins", (t) => {
+test("confirmed payments and equipment trades conserve coins", (t) => {
   const f = fixture(t);
   f.seed();
   f.seed(B);
   const before = f.total();
-  assert.throws(() => f.run("pay", [B, "500"]), /gifting is disabled/);
+  const payment = session(f.run("pay", [B, "500"]));
+  assert.equal(f.g.player(A).wallet, 10000);
+  assertPayload(UI.panel(f.g, payment));
+  f.click(payment, "confirm");
+  assert.equal(f.g.player(A).wallet, 9500);
+  assert.equal(f.g.player(B).wallet, 10500);
+  assert.throws(() => f.click(payment, "confirm"), /expired|completed/);
   const gear = f.g.giveGear(A, "sword1");
   f.run("trade", [B, String(gear), "1000"]);
   f.run("accept", ["1"], B);
   assert.equal(f.total(), before);
-  assert.equal(f.g.player(A).wallet, 11000);
-  assert.equal(f.g.player(B).wallet, 9000);
+  assert.equal(f.g.player(A).wallet, 10500);
+  assert.equal(f.g.player(B).wallet, 9500);
   assert.equal(f.g.gear(B, String(gear)).user, B);
 });
 for (const [command, args] of [
