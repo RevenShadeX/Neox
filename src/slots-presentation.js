@@ -1,7 +1,7 @@
 "use strict";
 const { setTimeout: delay } = require("node:timers/promises");
 const native = ["🌑", "🔮", "🦇", "💎", "⚔️", "👑"];
-const names = ["neox_element_dark", "neox_gem_epic", "neox_mob_shadow", "neox_gem_rare", "neox_sword", "neox_ui_crown"];
+const names = ["neox_dark", "neox_gem_epic", "neox_monsters_shadow", "neox_gem_rare", "neox_sword", "neox_crown"];
 const allowedMentions = { parse: [], repliedUser: false };
 function symbol(index, emojis) {
   return emojis.named(names[index], native[index]);
