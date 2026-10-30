@@ -43,6 +43,10 @@ function open(filename = "./data/neox.sqlite") {
  CREATE INDEX IF NOT EXISTS trades_expiry ON trades(expires);
  CREATE TABLE IF NOT EXISTS processed(id TEXT PRIMARY KEY,at INTEGER NOT NULL);
  CREATE INDEX IF NOT EXISTS processed_age ON processed(at);
+ CREATE TABLE IF NOT EXISTS agreements(user TEXT PRIMARY KEY REFERENCES players(id),accepted_at INTEGER NOT NULL);
+ CREATE TABLE IF NOT EXISTS dice_duels(id INTEGER PRIMARY KEY AUTOINCREMENT,guild TEXT NOT NULL,challenger TEXT NOT NULL REFERENCES players(id),opponent TEXT NOT NULL REFERENCES players(id),wager INTEGER NOT NULL,expires INTEGER NOT NULL);
+ CREATE UNIQUE INDEX IF NOT EXISTS dice_duels_opponent ON dice_duels(guild,opponent);
+ CREATE INDEX IF NOT EXISTS dice_duels_expiry ON dice_duels(expires);
  CREATE TABLE IF NOT EXISTS totals(key TEXT PRIMARY KEY,value INTEGER NOT NULL DEFAULT 0);
 
  `);
@@ -74,6 +78,7 @@ function open(filename = "./data/neox.sqlite") {
         sql("DELETE FROM cooldowns WHERE until < ?").run(now);
         sql("DELETE FROM effects WHERE expires < ? OR uses <= 0").run(now);
         sql("DELETE FROM trades WHERE expires < ?").run(now);
+        sql("DELETE FROM dice_duels WHERE expires < ?").run(now);
       })();
       db.pragma("wal_checkpoint(PASSIVE)");
     },
