@@ -105,3 +105,10 @@ Explicit SQLite FULL synchronous WAL commits, 256-page auto-checkpoints, a 1 MiB
 Backups are built privately and integrity-checked before atomic, no-replace hard-link publication. Concurrent destination creation cannot overwrite another backup, and staging files are removed on failure. Source databases remain read-only and unmigrated during backup. Off-host retention and temporary disk requirements are documented.
 
 Verification: 790 tests passed, including new/legacy storage layouts, incremental reclamation, active-reader checkpoint safety, retained balances, backup permissions/integrity and deterministic backup publication races.
+
+
+## Categorized public help
+
+Replaced the long plain-text help dump with a single categorized embed listing all 62 registered commands. Category views show descriptions; individual command views show current-prefix and slash syntax, aliases, permissions and selected concrete examples. Multiword aliases retain support. Help remains available before rules acceptance and follows each server's prefix. Both transports share one registry-backed guide service; ungrouped future commands remain discoverable.
+
+Verification: 795 tests passed, including complete command/category coverage, alias equivalence, Discord embed limits and prefix/slash help before rules acceptance.

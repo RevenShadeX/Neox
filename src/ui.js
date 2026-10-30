@@ -287,6 +287,15 @@ function queue(p) {
     allowedMentions,
   };
 }
+function help(p) {
+  return {
+    content: "",
+    embeds: [embed(p.title, p.description).setColor(0x5865f2)
+      .addFields(p.fields)
+      .setFooter({ text: "Neox • [optional] arguments • Dark Coins have no real-world value" })],
+    allowedMentions,
+  };
+}
 const cardStyles = {
   inventory: ["🎒 Inventory", 0x8b5cf6],
   leaderboard: ["🏆 Global Leaderboard", 0xf59e0b], levels: ["🏆 Level Rankings", 0xf59e0b],
@@ -330,4 +339,4 @@ function commandCards(output) {
     allowedMentions,
   }));
 }
-module.exports = { panel, modal, duel, queue, commandCards, cid, RED, allowedMentions };
+module.exports = { panel, modal, duel, queue, help, commandCards, cid, RED, allowedMentions };

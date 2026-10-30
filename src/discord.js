@@ -185,6 +185,10 @@ function createClient(
       await source.showModal(UI.modal(p));
       return;
     }
+    if (p?.kind === "help") {
+      await transport.show(UI.help(p));
+      return;
+    }
     if (p?.kind === "panel") {
       await transport.show(UI.panel(game, p.session));
       return;

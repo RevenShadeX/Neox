@@ -67,7 +67,7 @@ Prefix and slash commands use the same services. Canonical names are registered 
 | agree | — | Accept the game rules to start playing |
 | decline | — | Decline game rules and keep gameplay locked |
 | duel | @user amount / random amount / accept / decline / cancel | Challenge a server member to a fair dice duel |
-| help | [command] | Command guide |
+| help | [command\|category] | Categorized guide, aliases, syntax and examples |
 | cash (balance, bal, wallet) | — | Wallet and bank |
 | deposit (dep) | amount / all | Move Dark Coins into your bank |
 | withdraw (with) | amount / all | Withdraw banked coins |
@@ -225,3 +225,15 @@ Shop item names and dropdowns have matching icons by item type (weapons, armor, 
 - Create consistent backups using `node scripts/backup.js /persistent/backup/unique-name.sqlite`, then download them off the bot's small volume. Publishing is atomic and never replaces an existing destination, even during concurrent backup attempts. Backups are integrity-checked first; failed staging files are cleaned up. Backups need space for another full database, and the destination filesystem must support hard links. There is no unlimited automatic on-host backup archive.
 
 Durable settings reduce loss risk but cannot replace off-host backups or protect against failed hosting storage. Do not replace SQLite files with JSON, disable journaling, or disable sync to reduce storage.
+
+
+### Discovering commands
+
+Anyone can use `n help` or `/help` before accepting the game rules. The guide lists all registered commands by category and shows this server's current prefix. If the server uses `!`, use `!help` instead.
+
+- `n help games` lists coinflip, dice, slots and duels with descriptions.
+- `n help cf` shows syntax, aliases, permissions and a wager example; `n help coin flip` works too.
+- `n help roleshopadmin` explains role-shop management permissions.
+- `/help args:games` and `/help args:cf` show the same guides.
+
+Available categories: start, coins, hunting, items, gear, combat, games, progress, trading, roles, settings and legacy. Optional arguments use square brackets. Help is generated from the central command registry so command names, aliases and syntax remain consistent with the parser.

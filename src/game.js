@@ -2,6 +2,7 @@
 const C = require("./content");
 const { itemIcon, inventoryLabel } = require("./item-display");
 const { validPrefix } = require("./prefix");
+const { guide } = require("./help");
 const secure = require("./random");
 const { MAX } = require("./database");
 const { GameError, assert } = require("./errors");
@@ -411,21 +412,8 @@ class Game {
           ? this.duels.join(ctx, wager)
           : this.duels.create(ctx, userId(a[0]), wager);
       }
-      case "help": {
-        if (a[0]) {
-          const key = registry.resolve(a[0]);
-          assert(key, "Unknown command.");
-          const c = commands[key];
-          return `${key} ${c.usage || ""}\n${c.description}${c.aliases ? `\nAliases: ${c.aliases.join(", ")}` : ""}`;
-        }
-        return `Neox • Dark Coin adventures\nUse ${this.getPrefix(ctx.guildId)} <command> or /<command>. Slash commands accept the same arguments in their args field.\n${Object.entries(
-          commands,
-        )
-          .map(([k, v]) => `${k} — ${v.description}`)
-          .join(
-            "\n",
-          )}\nAll Dark Coins are virtual, cannot be purchased, and have no real-world value. Use help <command> for syntax.`;
-      }
+      case "help":
+        return guide(this.getPrefix(ctx.guildId), a[0]);
       case "cash":
         return `🪙 **Dark Coins**\n👛 Wallet: **${fmt(p.wallet)}**\n🏦 Bank: **${fmt(p.bank)}**`;
       case "deposit":

@@ -8,7 +8,7 @@ const commands = {
     usage: "@user amount|random amount|accept|decline|cancel",
     description: "Challenge a server member to a fair dice duel",
   },
-  help: { usage: "[command]", description: "Command guide" },
+  help: { usage: "[command|category]", description: "Browse commands, aliases and usage examples" },
   cash: {
     aliases: ["balance", "bal", "wallet"],
     description: "Wallet and bank",
@@ -31,11 +31,11 @@ const commands = {
   work: { description: "Work for companion supplies" },
   treasury: {
     usage: "[fund amount]",
-    description: "View or fund the existing-coin gambling treasury",
+    description: "View the legacy treasury; not required for gambling",
   },
   roleshop: { description: "Open this server role shop" },
   roleshopadmin: {
-    description: "Manage this server role shop (Manage Server)",
+    description: "Manage server role shop (Manage Server and Manage Roles)",
   },
   rolepurchases: {
     description: "Your recent role purchase and recovery statuses",
