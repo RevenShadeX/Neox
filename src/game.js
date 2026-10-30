@@ -360,34 +360,12 @@ class Game {
         ).run(id, deposit ? -amount : amount, name, this.clock());
         return `${deposit ? "Deposited" : "Withdrew"} ${fmt(amount)} Dark Coins.`;
       }
-      case "pay": {
-        assert(a.length === 2, "Usage: pay @user amount");
-        const target = userId(a[0]);
-        assert(target !== id, "You cannot pay yourself.");
-        const amount = n(a[1]);
-        assert(
-          this.sql("SELECT 1 FROM players WHERE id=?").get(target),
-          "Recipient must play Neox first.",
-        );
-        this.money(id, -amount, `payment to ${target}`);
-        this.money(target, amount, `payment from ${id}`);
-        return `Sent ${fmt(amount)} Dark Coins to <@${target}>.`;
-      }
-      case "daily":
-      case "weekly":
-      case "work": {
-        const periods = { daily: 86400000, weekly: 604800000, work: 3600000 };
-        this.cooldown(id, name, periods[name]);
-        const reward =
-          name === "daily"
-            ? 1200
-            : name === "weekly"
-              ? 8000
-              : this.rng.int(150, 450);
-        this.money(id, reward, name);
-        if (name === "daily") this.item(id, "box", "daily", 1);
-        if (name === "weekly") this.item(id, "box", "gem", 2);
-        return `You earned ${fmt(reward)} Dark Coins${name === "daily" ? " and a daily box" : name === "weekly" ? " and 2 gem boxes" : ""}.`;
+      case "daily": {
+        this.cooldown(id, "daily", 86400000);
+        const reward = 1200;
+        this.money(id, reward, "daily");
+        this.item(id, "box", "daily", 1);
+        return `You earned ${fmt(reward)} Dark Coins and a daily box.`;
       }
       case "history": {
         const page = a[0] ? n(a[0], 1, 100) : 1;
@@ -532,8 +510,8 @@ class Game {
           count += quantity;
         }
         assert(count > 0, "No animals to sell (all keeps one of each).");
-        this.money(id, total, "animal sale");
-        return `Sold ${fmt(count)} animals for ${fmt(total)} Dark Coins.`;
+        // Releasing duplicates does not mint new Dark Coins.
+        return `Released ${fmt(count)} duplicate monsters. No Dark Coins created.`;
       }
       case "huntstats":
         return `Level ${level(p)} • ${fmt(p.xp)} hunting XP\n${fmt(p.hunts)} hunts • streak ${p.streak}/50\n${this.sql("SELECT COUNT(*) AS n FROM discoveries WHERE user=?").get(id).n}/200 species discovered\nNext level: ${fmt(level(p) ** 2 * 100)} XP`;
@@ -555,9 +533,9 @@ class Game {
               }
             }
           assert(reward > 0, "No new completion rewards available.");
-          this.money(id, reward, "collection milestones");
+          // Collection milestones award boxes only, not currency.
         }
-        return `${count}/200 species discovered forever (selling does not erase discoveries).\nMilestones: 10, 25, 50, 100, 150, 200; each pays 100 Dark Coins per species plus a box.\n${reward ? `Claimed ${fmt(reward)} Dark Coins and milestone boxes.` : "Use collection claim to collect unlocked rewards."}`;
+        return `${count}/200 species discovered forever (selling does not erase discoveries).\nMilestones: 10, 25, 50, 100, 150, 200; each grants a box.\n${reward ? `Claimed milestone boxes.` : "Use collection claim to collect unlocked rewards."}`;
       }
       case "inventory": {
         const rows = this.sql(
@@ -725,8 +703,8 @@ class Game {
           g.enhance * 100;
         this.sql("DELETE FROM trades WHERE gear=?").run(g.id);
         this.sql("DELETE FROM gear WHERE id=?").run(g.id);
-        this.money(id, price, "equipment sale");
-        return `Sold #${g.id} for ${price} Dark Coins.`;
+        // Equipment disposal is not a source of new Dark Coins.
+        return `Disposed of equipment #${g.id}. No Dark Coins created.`;
       }
       case "boxes":
         return (
@@ -909,7 +887,7 @@ class Game {
         const won = hp > 0 && (ehp <= 0 || hp > ehp),
           draw = hp > 0 && hp === ehp;
         const reward = boss ? (won ? 800 : 80) : draw ? 30 : won ? 160 : 40;
-        this.money(id, reward, boss ? "boss battle" : "battle");
+        // Battles grant progression only; no new Dark Coins.
         this.sql(
           "UPDATE players SET battles_total=battles_total+1 WHERE id=?",
         ).run(id);
@@ -1175,9 +1153,9 @@ ${won ? `Won ${fmt(wager)}` : `Lost ${fmt(wager)}`} Dark Coins.`;
           }
         }
         assert(claimed > 0, "No completed unclaimed quests.");
-        this.money(id, coins, "quest rewards");
+        // Quests award progression XP, never newly minted currency.
         return {
-          content: `Completed ${claimed} quests • +${coins} Dark Coins.`,
+          content: `Completed ${claimed} quests • progression XP awarded.`,
           completedQuests: claimed,
         };
       }
