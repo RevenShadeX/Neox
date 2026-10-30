@@ -25,7 +25,7 @@ const commands = {
   },
   pay: {
     usage: "@user amount",
-    description: "Direct currency gifting is disabled",
+    description: "Send Dark Coins to another player with confirmation",
   },
   weekly: { description: "Claim weekly item supplies" },
   work: { description: "Work for companion supplies" },
