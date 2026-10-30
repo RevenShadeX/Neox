@@ -6,6 +6,10 @@ const {
   PermissionFlagsBits,
   SlashCommandBuilder,
   Events,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder,
 } = require("discord.js");
 const { GameError } = require("./game");
 const { commands, registry } = require("./commands");
@@ -104,6 +108,18 @@ function createClient(
     console.error("Command error:", err);
     return "Neox could not complete this action. No partial game changes were saved. Try again later.";
   };
+  const agreementCard = () => ({
+    embeds: [new EmbedBuilder()
+      .setColor(0xB91C32)
+      .setTitle("NEOX | Player Agreement")
+      .setDescription("Dark Coins are virtual and have no real-money value. Games involve chance, and winnings are not guaranteed. No exploits, automation abuse, or real-money trading. Follow Discord rules.\n\n**Choose below to unlock or decline gameplay.**")],
+    components: [new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId("neox:rules:accept").setLabel("Accept Rules").setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId("neox:rules:decline").setLabel("Decline").setStyle(ButtonStyle.Secondary)
+    )],
+    allowedMentions,
+  });
+  const needsAgreement = (content) => typeof content === "string" && content.includes("Accept Neox rules first:");
   client.on(Events.MessageCreate, async (message) => {
     if (
       message.author.bot ||
@@ -134,7 +150,9 @@ function createClient(
       output = { content: errorText(err) };
     }
     try {
-      if (output.presentation?.kind === "coinflip") {
+      if (needsAgreement(output.content) || parsed.command === "rules") {
+        await message.channel.send(agreementCard());
+      } else if (output.presentation?.kind === "coinflip") {
         await presentCoinflip(
           output,
           {
@@ -177,6 +195,16 @@ function createClient(
     }
   });
   client.on(Events.InteractionCreate, async (interaction) => {
+    if (interaction.isButton() && interaction.customId.startsWith("neox:rules:")) {
+      try {
+        const action = interaction.customId.endsWith(":accept") ? "agree" : "decline";
+        const result = game.executeResult(action, [], {userId: interaction.user.id, guildId: interaction.guildId, requestId: interaction.id});
+        await interaction.reply({content: result.content, ephemeral: true, allowedMentions});
+      } catch (err) {
+        if (!interaction.replied) await interaction.reply({content: errorText(err), ephemeral: true});
+      }
+      return;
+    }
     if (
       !interaction.isChatInputCommand() ||
       !registry.resolve(interaction.commandName)
@@ -251,6 +279,8 @@ function createClient(
             allowedMentions,
           });
         }
+      } else if (needsAgreement(output.content) || interaction.commandName === "rules") {
+        await interaction.editReply(agreementCard());
       } else {
         const parts = chunks(output.content);
         await interaction.editReply({ content: parts[0], allowedMentions });
