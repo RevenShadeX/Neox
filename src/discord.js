@@ -10,6 +10,9 @@ const {
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
 } = require("discord.js");
 const { GameError } = require("./game");
 const { commands, registry } = require("./commands");
@@ -119,6 +122,15 @@ function createClient(
     )],
     allowedMentions,
   });
+  const coinflipPanel = (owner) => ({
+    embeds: [new EmbedBuilder().setColor(0xB91C32)
+      .setTitle("NEOX | Coinflip")
+      .setDescription("Choose **Heads** or **Tails** below, then enter your wager in the popup. Dark Coins are virtual.")],
+    components: [new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`neox:cf:${owner}:h`).setLabel("Heads").setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`neox:cf:${owner}:t`).setLabel("Tails").setStyle(ButtonStyle.Danger)
+    )], allowedMentions,
+  });
   const needsAgreement = (content) => typeof content === "string" && content.includes("Accept Neox rules first:");
   client.on(Events.MessageCreate, async (message) => {
     if (
@@ -132,6 +144,10 @@ function createClient(
       game.getPrefix(message.guildId),
     );
     if (!parsed) return;
+    if (parsed.command === "cf" && parsed.args.length === 0) {
+      await message.channel.send(coinflipPanel(message.author.id));
+      return;
+    }
     let output;
     try {
       output = game.executeResult(parsed.command, parsed.args, {
@@ -195,6 +211,42 @@ function createClient(
     }
   });
   client.on(Events.InteractionCreate, async (interaction) => {
+    if (interaction.isButton() && interaction.customId.startsWith("neox:cf:")) {
+      const [, , owner, side] = interaction.customId.split(":");
+      if (interaction.user.id !== owner) {
+        await interaction.reply({content: "Only the player who opened this coinflip can use these buttons.", ephemeral: true});
+        return;
+      }
+      const modal = new ModalBuilder().setCustomId(`neox:cfbet:${side}`).setTitle("Neox | Place Coinflip Bet");
+      modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder()
+        .setCustomId("wager").setLabel("Dark Coins (amount, all, or half)")
+        .setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(20)));
+      await interaction.showModal(modal);
+      return;
+    }
+    if (interaction.isModalSubmit() && interaction.customId.startsWith("neox:cfbet:")) {
+      const side = interaction.customId.split(":")[2];
+      await interaction.deferReply();
+      try {
+        const amount = interaction.fields.getTextInputValue("wager").trim().toLowerCase();
+        const output = game.executeResult("cf", [amount, side], {
+          userId: interaction.user.id, guildId: interaction.guildId,
+          displayName: interaction.member?.displayName || interaction.user.username,
+          requestId: interaction.id,
+        });
+        if (output.presentation?.kind === "coinflip") {
+          await presentCoinflip(output, {
+            show: payload => interaction.editReply(payload),
+            finish: (_, payload) => interaction.editReply(payload),
+            fallback: payload => interaction.editReply(payload),
+          }, { ...animation, emojis: emojiContext(interaction) });
+        } else await interaction.editReply({content: output.content, allowedMentions});
+      } catch (err) {
+        const content = errorText(err);
+        await interaction.editReply(needsAgreement(content) ? agreementCard() : {content, allowedMentions});
+      }
+      return;
+    }
     if (interaction.isButton() && interaction.customId.startsWith("neox:rules:")) {
       try {
         const action = interaction.customId.endsWith(":accept") ? "agree" : "decline";
@@ -210,6 +262,10 @@ function createClient(
       !registry.resolve(interaction.commandName)
     )
       return;
+    if (interaction.commandName === "cf" && !interaction.options.getString("args")) {
+      await interaction.reply(coinflipPanel(interaction.user.id));
+      return;
+    }
     try {
       await interaction.deferReply();
     } catch (err) {
