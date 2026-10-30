@@ -479,7 +479,7 @@ function createClient(
     tick();
     timer = setInterval(tick, 15000);
     timer.unref();
-    if (Object.keys(emojis.config).length)
+    if (client.application?.emojis)
       client.application.emojis
         .fetch()
         .then((found) => emojis.observeApplication(found.values()))
