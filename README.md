@@ -237,3 +237,23 @@ Anyone can use `n help` or `/help` before accepting the game rules. The guide li
 - `/help args:games` and `/help args:cf` show the same guides.
 
 Available categories: start, coins, hunting, items, gear, combat, games, progress, trading, roles, settings and legacy. Optional arguments use square brackets. Help is generated from the central command registry so command names, aliases and syntax remain consistent with the parser.
+
+
+### Wispbyte startup troubleshooting (npm 12)
+
+If the log reports **`Command alias collision: sell`**, Neox has rejected an ambiguous command definition. The shipped registry keeps `sell` for equipment disposal and `release` / `sellmonsters` for monsters. Repeated aliases for the same handler are harmless; assigning one alias to different handlers still fails with both conflicting command names. Deploy the complete current `src/` from `audit/global-stability-storage` so hosted files are consistent, preserving your private `.env` and persistent `data/`. Do not attach `sell` as an alias to another command.
+
+The lockfile currently selects **better-sqlite3 12.11.1**. `package.json` includes the version-pinned npm 12 `allowScripts` approval for its native build. A clean npm 12 installation and a real in-memory SQLite query have been verified. Other dependency scripts are not blanket-approved. When intentionally updating SQLite, review its native installer and update the pinned approval to match the new lockfile.
+
+Install/verify once after deploying source or dependencies:
+
+```sh
+npm ci --no-audit --no-fund
+npm run check
+```
+
+Use **`npm start`** as the normal startup command, rather than reinstalling and rebuilding dependencies on every restart. If moving an existing `node_modules` from a different Node version or machine, reinstall on the target host. A `prebuild-install` deprecation warning is upstream; it does not cause the alias collision or indicate an out-of-memory crash.
+
+Application emojis uploaded in the Developer Portal work without the server's Use External Emojis permission. External emojis from a different server still need that permission. Set the supported emoji IDs in private configuration; unknown/unavailable IDs use Unicode fallbacks.
+
+Random matchmaking persists the original queue message location in expiring UI state and updates it with match controls. Transient notification failures retry on the bounded background tick; the original Cancel Search control can cancel its linked pending match. If Discord cannot edit the original message, typed `duel accept`, `duel decline`, and `duel cancel` remain available. Both players must accept, and no coins move before settlement.

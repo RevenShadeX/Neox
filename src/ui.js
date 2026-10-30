@@ -280,7 +280,7 @@ function queue(p) {
     embeds: [
       embed(
         "Random Dice Matchmaking",
-        `Waiting for a compatible player in this server.\nBoth players must explicitly accept the matched wager.\nExpires <t:${Math.floor(p.expires / 1000)}:R>.`,
+        `Waiting for a compatible player in this server.\nBoth players must explicitly accept the matched wager. Neox updates this message when matched. You can also use duel accept, duel decline or duel cancel.\nExpires <t:${Math.floor(p.expires / 1000)}:R>.`,
       ),
     ],
     components: [row(button(`nq:${p.id}:cancel`, "Cancel Search"))],

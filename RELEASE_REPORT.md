@@ -112,3 +112,16 @@ Verification: 790 tests passed, including new/legacy storage layouts, incrementa
 Replaced the long plain-text help dump with a single categorized embed listing all 62 registered commands. Category views show descriptions; individual command views show current-prefix and slash syntax, aliases, permissions and selected concrete examples. Multiword aliases retain support. Help remains available before rules acceptance and follows each server's prefix. Both transports share one registry-backed guide service; ungrouped future commands remain discoverable.
 
 Verification: 795 tests passed, including complete command/category coverage, alias equivalence, Discord embed limits and prefix/slash help before rules acceptance.
+
+
+## Hosting-log audit and verified fixes — 2026-10-31
+
+The supplied Wispbyte log shows a registry error `Command alias collision: sell`, not an OOM. The committed registry does not contain that cross-command collision, so the hosted source differs. The entire current source set must be deployed together, preserving private configuration and live data. Same-handler duplicate aliases are now idempotent; cross-handler ambiguity still fails with both command names. Startup import errors now use the normal concise startup failure handler.
+
+Fixed case normalization before Discord duel membership enrichment; application emoji permission handling; lost retry controls after invalid role-price modals; shared-panel button removal on failed component clicks; validated default-prefix injection; cleanup when recovery, Discord destruction or final checkpoint fails; and a late role-reconciliation callback that could touch a closed database. Discord 403 access failures keep payments uncertain rather than falsely claiming a role is absent.
+
+Matched random queues now store their message location and match linkage in the existing expiring UI table. Original messages receive match controls, notifications retry across service restarts, and old queue cancellation only affects the linked match. The notification concurrency is bounded and a partial index supports recovery queries. Existing schema version and player data remain compatible.
+
+Added npm 12's version-pinned native install approval for better-sqlite3 12.11.1; a real clean npm 12 install and native SQLite query succeeded in an isolated directory. The upstream prebuild-install deprecation remains a nonfatal warning. Runtime startup text now reflects direct bot-paid gambling.
+
+Validation: baseline 795 tests passed; final 811 tests passed. Production dependency audit reports zero vulnerabilities. No live Discord token or hosted database was used; Discord behavior is covered by mocked transport/REST tests and real SQLite transactions. Live permissions, Wispbyte restart policy and hosted file consistency require deployment verification.

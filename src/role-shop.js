@@ -262,6 +262,7 @@ class RoleRecovery {
           return "refunded";
         } catch {}
       }
+      if (this.stopped) return "pending";
       this.game.roleShop.retry(
         p,
         String(error.code || error.status || "API unavailable"),

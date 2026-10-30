@@ -26,6 +26,7 @@ function runtimeConfig(env = process.env, nodeVersion = process.versions.node) {
     throw Error("MAINTENANCE_INTERVAL_SECONDS must be 30–3600.");
   return {
     token: env.DISCORD_TOKEN.trim(),
+    defaultPrefix: prefix,
     database: path.resolve(env.DATABASE_PATH || "./data/neox.sqlite"),
     maintenance: seconds * 1000,
     maxBet: readMaxBet(env.MAX_BET || "100000"),
@@ -55,14 +56,23 @@ async function start({
         process.removeListener("SIGTERM", onSignal);
       }
       try {
-        await client?.neoxStop?.();
-        client?.destroy();
-        await closeHTTP();
+        try {
+          await client?.neoxStop?.();
+        } finally {
+          try {
+            await client?.destroy();
+          } finally {
+            await closeHTTP();
+          }
+        }
       } finally {
         if (store) {
-          store.db.pragma("wal_checkpoint(TRUNCATE)");
-          store.close();
-          store = null;
+          try {
+            store.db.pragma("wal_checkpoint(TRUNCATE)");
+          } finally {
+            store.close();
+            store = null;
+          }
         }
         logger.log("Neox stopped; SQLite checkpoint complete.");
       }
@@ -72,11 +82,12 @@ async function start({
     const game = makeGame(store, {
       maxBet: config.maxBet,
       leveling: config.leveling,
+      defaultPrefix: config.defaultPrefix,
     });
     client = makeClient(game);
     store.maintenance();
     logger.log(
-      "Neox starting • Node 24 • SQLite WAL • no real-money currency • treasury is funded by existing coins only.",
+      "Neox starting • Node 24 • durable SQLite WAL • casino winnings paid by Neox • virtual currency only.",
     );
     timer = setInterval(() => {
       try {

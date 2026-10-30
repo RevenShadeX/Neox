@@ -63,6 +63,7 @@ function open(filename = "./data/neox.sqlite") {
  `);
   try {
     migrate(db);
+    db.exec("CREATE INDEX IF NOT EXISTS ui_queue_recovery ON ui_sessions(status,expires) WHERE kind='queue_delivery'");
   } catch (error) {
     db.close();
     throw error;

@@ -9,13 +9,14 @@ const {
 } = require("discord.js");
 const { GameError, userId, number } = require("./game");
 const { serverPermissions } = require("./permissions");
-const { commands, registry } = require("./commands");
+const { commands, registry, normalizeArguments } = require("./commands");
 const { parsePrefix, parseArguments } = require("./parser");
 const { presentCoinflip, levelUpPayload } = require("./presentation");
 const { EmojiResolver } = require("./emojis");
 const { ProfileService } = require("./profile-service");
 const { RoleRecovery } = require("./role-shop");
 const { roleAPI } = require("./discord-roles");
+const { DuelDelivery } = require("./duel-delivery");
 const UI = require("./ui");
 function definitions() {
   return Object.entries(commands).map(([name, c]) => {
@@ -89,16 +90,19 @@ function createClient(
   });
   const profileService = new ProfileService(client, profiles),
     api = roles || roleAPI(client),
-    recovery = new RoleRecovery(game, api);
+    recovery = new RoleRecovery(game, api),
+    duelDelivery = new DuelDelivery(game, client);
   let timer;
   const roleChecks = new Set();
   const originalDestroy = client.destroy.bind(client);
   client.neoxStop = async () => {
     clearInterval(timer);
+    duelDelivery.stop();
     await recovery.stop();
   };
   client.destroy = () => {
     clearInterval(timer);
+    duelDelivery.stop();
     return originalDestroy();
   };
   client.neoxRecovery = recovery;
@@ -195,10 +199,12 @@ function createClient(
     }
     if (p?.kind === "duel") {
       await transport.show(UI.duel(p));
+      if (output.matchedQueue) await duelDelivery.notify(output.matchedQueue);
       return;
     }
     if (p?.kind === "queue") {
-      await transport.show(UI.queue(p));
+      const message = await transport.show(UI.queue(p));
+      await duelDelivery.bind(p.id, source, message);
       return;
     }
     if (p?.kind === "coinflip")
@@ -287,7 +293,7 @@ function createClient(
     try {
       if (name === "duel") {
         game.requireAgreement(ctx.userId);
-        await enrichDuel(message, parsed.args, ctx);
+        await enrichDuel(message, normalizeArguments(name, parsed.args), ctx);
       }
       output = execute(name, parsed.args, ctx);
     } catch (e) {
@@ -322,8 +328,23 @@ function createClient(
       if (error.code === "RULES_REQUIRED") {
         const rules = game.executeResult("rules", [], context(i, true));
         payload = UI.panel(game, rules.presentation.session);
+      } else if (i.isModalSubmit?.()) {
+        const match = /^nx:([a-f0-9]{24}):/.exec(i.customId || "");
+        if (match) {
+          try {
+            const current = game.sessions.get(match[1]);
+            if (current) {
+              const session = game.sessions.verify(current.id, current.version, context(i, true));
+              game.requireAgreement(session.owner);
+              payload = { ...UI.panel(game, session), content: errorText(error) };
+            }
+          } catch { /* Expired or unauthorized sessions must not expose controls. */ }
+        }
       }
-      if (i.deferred || i.replied) await i.editReply(payload);
+      // A failed component click must not erase a shared panel's buttons.
+      if (i.deferred && !i.isModalSubmit?.() && !i.isChatInputCommand?.())
+        await i.followUp({ ...payload, flags: 64 });
+      else if (i.deferred || i.replied) await i.editReply(payload);
       else await i.reply({ ...payload, flags: 64 });
     } catch (e) {
       logError("Interaction error response unavailable:", e);
@@ -346,7 +367,7 @@ function createClient(
       try {
         if (name === "duel") {
           game.requireAgreement(ctx.userId);
-          await enrichDuel(i, args, ctx);
+          await enrichDuel(i, normalizeArguments(name, args), ctx);
         }
         output = execute(name, args, ctx);
       } catch (e) {
@@ -366,7 +387,8 @@ function createClient(
       throw new GameError("This old panel expired. Open a new Neox command.");
     if (id.startsWith("nd:") || id.startsWith("nq:")) {
       const match = /^(nd|nq):([a-f0-9]{24}):(accept|decline|cancel)$/.exec(id);
-      if (!match) throw new GameError("Invalid duel control.");
+      if (!match || (match[1] === "nq" ? match[3] !== "cancel" : match[3] === "cancel"))
+        throw new GameError("Invalid duel control.");
       // Ownership and server checks precede all membership API requests.
       if (match[1] === "nd") {
         const d = game
@@ -462,7 +484,8 @@ function createClient(
     );
     const tick = () => {
       if (client.isReady())
-        recovery.recover().catch((e) => logError("Role recovery failed:", e));
+        Promise.all([recovery.recover(), duelDelivery.recover()])
+          .catch((e) => logError("Background recovery failed:", e));
     };
     tick();
     timer = setInterval(tick, 15000);

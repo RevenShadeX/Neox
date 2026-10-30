@@ -40,7 +40,7 @@ class EmojiResolver {
     const result = { ...fallback, customSpin: false };
     for (const [kind, id] of Object.entries(this.config)) {
       const available = this.available.get(id);
-      if (available && (available.guildId === guildId || externalEmojis)) {
+      if (available && (available.application || available.guildId === guildId || externalEmojis)) {
         result[kind] = `<${available.animated ? "a" : ""}:neox_${kind}:${id}>`;
         if (kind === "spin") result.customSpin = true;
       }

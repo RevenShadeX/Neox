@@ -90,7 +90,15 @@ class Duels {
     ) {
       g.sql("DELETE FROM matchmaking WHERE user=?").run(candidate.user);
       g.sql("DELETE FROM duel_presence WHERE user=?").run(candidate.user);
-      return this.create(ctx, candidate.user, wager, true);
+      const result = this.create(ctx, candidate.user, wager, true);
+      const panel = g.sql("SELECT state FROM ui_sessions WHERE id=? AND kind='queue_delivery'").get(candidate.token);
+      if (panel) {
+        const state = { ...JSON.parse(panel.state), match: result.presentation.id };
+        g.sql("UPDATE ui_sessions SET state=?,expires=? WHERE id=?").run(
+          JSON.stringify(state), result.presentation.expires, candidate.token,
+        );
+      }
+      return { ...result, matchedQueue: candidate.token };
     }
     const id = token(),
       expires = g.clock() + 120000;
@@ -100,6 +108,8 @@ class Duels {
     g.sql(
       "INSERT INTO duel_presence(user,guild,kind,reference,expires) VALUES(?,?,'queue',?,?)",
     ).run(ctx.userId, ctx.guildId, id, expires);
+    g.sql("INSERT INTO ui_sessions(id,owner,guild,kind,state,expires,created) VALUES(?,?,?,'queue_delivery','{}',?,?)")
+      .run(id, ctx.userId, ctx.guildId, expires, g.clock());
     return {
       content: `Searching this server for a ${wager.toLocaleString("en-US")} Dark Coin duel. Both players must accept the matched challenge. No coins are deducted now.`,
       presentation: { kind: "queue", id, owner: ctx.userId, expires },
@@ -111,8 +121,11 @@ class Duels {
     const presence = g
       .sql("SELECT * FROM duel_presence WHERE user=? AND guild=?")
       .get(ctx.userId, ctx.guildId);
+    const queuePanel = reference && g.sql("SELECT state FROM ui_sessions WHERE id=? AND owner=? AND guild=? AND kind='queue_delivery'")
+      .get(reference, ctx.userId, ctx.guildId);
+    const linked = queuePanel && JSON.parse(queuePanel.state).match;
     assert(
-      presence && (!reference || presence.reference === reference),
+      presence && (!reference || presence.reference === reference || linked === presence.reference),
       "No active match or queue entry.",
     );
     if (presence.kind === "queue") {

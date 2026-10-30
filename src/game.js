@@ -49,6 +49,7 @@ class Game {
       clock = Date.now,
       maxBet = readMaxBet(),
       leveling = readLevelingConfig(),
+      defaultPrefix = process.env.DEFAULT_PREFIX || "n",
     } = {},
   ) {
     this.store = store;
@@ -57,6 +58,8 @@ class Game {
     this.rng = rng;
     this.clock = clock;
     this.maxBet = readMaxBet(String(maxBet));
+    assert(validPrefix(defaultPrefix), "Invalid default prefix.");
+    this.defaultPrefix = defaultPrefix;
     this.progression = new Progression(this, leveling);
     this.economy = new Economy(this);
     this.sessions = new Sessions(this);
@@ -73,8 +76,7 @@ class Game {
     return (
       (guild &&
         this.sql("SELECT prefix FROM guilds WHERE id=?").get(guild)?.prefix) ||
-      process.env.DEFAULT_PREFIX ||
-      "n"
+      this.defaultPrefix
     );
   }
   money(id, delta, reason) {

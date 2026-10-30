@@ -242,7 +242,14 @@ function buildAliasRegistry(definitions) {
       const name = normalizeAlias(raw);
       if (!/^[a-z][a-z0-9]*( [a-z][a-z0-9]*)*$/.test(name))
         throw new Error(`Invalid command alias: ${raw}`);
-      if (lookup.has(name)) throw new Error(`Command alias collision: ${name}`);
+      if (lookup.has(name)) {
+        // Repeating an alias for the same handler is harmless. Cross-command
+        // collisions must still fail rather than dispatch the wrong game.
+        if (lookup.get(name) === command) continue;
+        throw new Error(
+          `Command alias collision: ${name} (${lookup.get(name)} and ${command}). Remove the duplicate alias from one command.`,
+        );
+      }
       lookup.set(name, command);
       let node = root;
       for (const word of name.split(" ")) {

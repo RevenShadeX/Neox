@@ -301,7 +301,6 @@ test("alias collisions reject registration including case and whitespace differe
     { cf: { aliases: ["cash"] }, cash: {} },
     { a: { aliases: ["FLIP"] }, b: { aliases: ["flip"] } },
     { a: { aliases: ["coin flip"] }, b: { aliases: [" COIN   FLIP "] } },
-    { a: { aliases: ["a"] } },
   ])
     assert.throws(() => buildAliasRegistry(definitions), /collision/);
   assert.throws(

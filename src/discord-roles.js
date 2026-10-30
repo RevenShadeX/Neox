@@ -2,8 +2,7 @@
 const { PermissionFlagsBits } = require("discord.js");
 function missing(error) {
   return (
-    [10004, 10007, 10011, 50001].includes(error.code) ||
-    [403, 404].includes(error.status)
+    [10004, 10007, 10011].includes(error.code) || error.status === 404
   );
 }
 function roleAPI(client) {
