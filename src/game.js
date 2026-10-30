@@ -999,6 +999,22 @@ class Game {
         response.content = formatCoinflip(response);
         return response;
       }
+      case "dice": {
+        const choice = { h: "high", high: "high", l: "low", low: "low" }[a[1]];
+        assert(choice, "Usage: dice amount|all|half high|low");
+        const requested = a[0] === "all" ? Math.min(p.wallet, this.maxBet)
+          : a[0] === "half" ? Math.min(Math.floor(p.wallet / 2), this.maxBet) : a[0];
+        const wager = n(String(requested), 1, this.maxBet);
+        assert(wager <= p.wallet, "Not enough Dark Coins.");
+        this.cooldown(id, "gamble", 5000);
+        this.money(id, -wager, "dice wager");
+        const roll = this.rng.int(1, 6);
+        const result = roll >= 4 ? "high" : "low";
+        const won = choice === result;
+        if (won) this.money(id, wager * 2, "dice payout");
+        return `🎲 Dice rolled **${roll}** (${result.toUpperCase()}). You chose ${choice.toUpperCase()}.
+${won ? `Won ${fmt(wager)}` : `Lost ${fmt(wager)}`} Dark Coins.`;
+      }
       case "slots": {
         assert(a.length === 1, "Usage: slots amount");
         this.cooldown(id, "gamble", 5000);
