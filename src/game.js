@@ -343,12 +343,14 @@ class Game {
         }
         return "🔒 Rules declined. Gameplay is locked until you accept the rules.";
       }
-      case "pay":
-        assert(
-          false,
-          "Direct Dark Coin gifting is disabled. Equipment trades remain available.",
-        );
-        break;
+      case "pay": {
+        assert(a.length === 2, "Usage: pay @user amount");
+        const recipient = userId(a[0]);
+        const amount = n(a[1]);
+        assert(recipient !== id, "You cannot pay yourself.");
+        assert(p.wallet >= amount, "Not enough Dark Coins.");
+        return this.sessions.create("payment", ctx, { recipient, amount });
+      }
       case "weekly":
         this.cooldown(id, "weekly", 604800000);
         this.item(id, "box", "gem", 2);
