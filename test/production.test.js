@@ -133,7 +133,7 @@ test("global rules consent is required, persists across servers, and decline rel
   f.click(s, "agree");
   assert.equal(
     f.run("cash", [], A, { guildId: H }).content,
-    "Dark Coins: 0 wallet • 0 bank",
+    "🪙 **Dark Coins**\n👛 Wallet: **0**\n🏦 Bank: **0**",
   );
   f.run("decline");
   assert.throws(

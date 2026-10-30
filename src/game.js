@@ -326,7 +326,7 @@ class Game {
         this.sql(
           "INSERT OR IGNORE INTO agreements(user,accepted_at) VALUES(?,?)",
         ).run(id, this.clock());
-        return "Neox rules accepted globally. Your account is unlocked in every server.";
+        return "✅ Neox rules accepted globally. Your account is unlocked in every server.";
       case "decline": {
         this.sql("DELETE FROM agreements WHERE user=?").run(id);
         const active = this.sql("SELECT * FROM duel_presence WHERE user=?").get(
@@ -335,7 +335,7 @@ class Game {
         if (active) {
           this.duels.cancel({ ...ctx, guildId: active.guild });
         }
-        return "Rules declined. Gameplay is locked until you accept the rules.";
+        return "🔒 Rules declined. Gameplay is locked until you accept the rules.";
       }
       case "pay":
         assert(
@@ -346,11 +346,11 @@ class Game {
       case "weekly":
         this.cooldown(id, "weekly", 604800000);
         this.item(id, "box", "gem", 2);
-        return "Weekly supplies: two gem boxes. No Dark Coins created.";
+        return "🎁 **Weekly supplies claimed!**\n💎 Two gem boxes added to your inventory.";
       case "work":
         this.cooldown(id, "work", 3600000);
         this.item(id, "food", "food", 3);
-        return "Work completed: three Companion Rations. No Dark Coins created.";
+        return "🛠️ **Work completed!**\n🍖 Three Companion Rations added to your inventory.";
       case "treasury": {
         if (a.length) {
           assert(
@@ -422,7 +422,7 @@ class Game {
           )}\nAll Dark Coins are virtual, cannot be purchased, and have no real-world value. Use help <command> for syntax.`;
       }
       case "cash":
-        return `Dark Coins: ${fmt(p.wallet)} wallet • ${fmt(p.bank)} bank`;
+        return `🪙 **Dark Coins**\n👛 Wallet: **${fmt(p.wallet)}**\n🏦 Bank: **${fmt(p.bank)}**`;
       case "deposit":
       case "withdraw": {
         assert(a.length === 1, `Usage: ${name} amount|all`);
@@ -439,14 +439,14 @@ class Game {
         this.sql(
           "INSERT INTO ledger(user,delta,reason,at) VALUES(?,?,?,?)",
         ).run(id, deposit ? -amount : amount, name, this.clock());
-        return `${deposit ? "Deposited" : "Withdrew"} ${fmt(amount)} Dark Coins.`;
+        return `✅ ${deposit ? "Deposited" : "Withdrew"} **${fmt(amount)} Dark Coins**.\n👛 Wallet: ${fmt(this.player(id).wallet)} • 🏦 Bank: ${fmt(this.player(id).bank)}`;
       }
       case "daily": {
         this.cooldown(id, "daily", 86400000);
         const reward = 1200;
         this.money(id, reward, "daily");
         this.item(id, "box", "daily", 1);
-        return `You earned ${fmt(reward)} Dark Coins and a daily box.`;
+        return `🎁 **Daily reward claimed!**\n🪙 +${fmt(reward)} Dark Coins\n📦 +1 Daily Cache\n\n⏳ Your next daily reward is available in 24 hours.`;
       }
       case "history": {
         const page = a[0] ? n(a[0], 1, 100) : 1;
@@ -487,7 +487,7 @@ class Game {
         const rows = this.sql(
           `SELECT id,${col} AS score FROM players ORDER BY score DESC,id LIMIT 10 OFFSET ?`,
         ).all((page - 1) * 10);
-        return `${mode.toUpperCase()} • Global rankings\n${rows.map((r, i) => `${(page - 1) * 10 + i + 1}. <@${r.id}> — ${fmt(r.score)}`).join("\n") || "No players."}\nPage ${page}`;
+        return `🏆 **${mode.toUpperCase()} • Global rankings**\n${rows.map((r, i) => `${(page - 1) * 10 + i + 1}. <@${r.id}> — ${fmt(r.score)}`).join("\n") || "No players."}\nPage ${page}`;
       }
       case "hunt": {
         this.cooldown(id, "hunt", 20000);
@@ -542,7 +542,7 @@ class Game {
         this.sql(
           "UPDATE effects SET uses=uses-1 WHERE user=? AND expires>? AND uses>0",
         ).run(id, this.clock());
-        return `You found:\n${found.map((x) => `${x.id} • ${x.name} [${x.rarity}]`).join("\n")}\n+${reward} Dark Coins • +${xp} hunting XP • streak ${streak} • level ${level(this.player(id))}`;
+        return `🐾 **Hunt complete!** You found:\n${found.map((x) => `${x.id} • ${x.name} [${x.rarity}]`).join("\n")}\n\n🪙 +${fmt(reward)} Dark Coins • ✨ +${fmt(xp)} hunting XP\n🔥 Streak ${streak} • 🎯 Hunting level ${level(this.player(id))}`;
       }
       case "zoo": {
         const rows = this.sql(
@@ -643,7 +643,7 @@ class Game {
                 `#${g.id} ${g.item} L${g.level} +${g.enhance}${g.slot ? " [equipped]" : ""}`,
             ),
         );
-        return this.page(rows, a[0]);
+        return `🎒 **Your inventory**\n${this.page(rows, a[0])}`;
       }
       case "gems":
         return `${
@@ -776,7 +776,7 @@ class Game {
             item.id,
             quantity,
           );
-        return `Bought ${quantity} ${item.name || item.id} for ${fmt(item.price * quantity)} Dark Coins.`;
+        return `🛍️ Bought ${quantity} ${item.name || item.id} for **${fmt(item.price * quantity)} Dark Coins**.\n🎒 Added to your inventory.`;
       }
       case "sell": {
         const g = this.gear(id, a[0]);
@@ -1151,7 +1151,7 @@ class Game {
         this.sql(
           "INSERT INTO guilds(id,prefix) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET prefix=excluded.prefix",
         ).run(ctx.guildId, a[0]);
-        return `Server prefix is now ${a[0]}. Example: ${a[0]} hunt`;
+        return `✅ Server prefix is now ${a[0]}. Example: ${a[0]} hunt`;
       }
       case "profile":
       case "rank":

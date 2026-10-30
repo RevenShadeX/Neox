@@ -17,12 +17,22 @@ const RED = 0xb91c32,
   allowedMentions = { parse: [], repliedUser: false };
 const row = (...components) =>
   new ActionRowBuilder().addComponents(...components);
-const button = (id, label, style = ButtonStyle.Secondary, disabled = false) =>
-  new ButtonBuilder()
+const button = (id, label, style = ButtonStyle.Secondary, disabled = false) => {
+  const emojis = {
+    "Accept Rules": "✅", Decline: "✖️", Heads: "💀", Tails: "👑",
+    Cancel: "✖️", Previous: "◀️", Next: "▶️", Gems: "💎",
+    Equipment: "⚔️", "Loot boxes": "📦", Consumables: "🍖",
+    "Confirm Purchase": "🛍️", "Enter Quantity": "🔢", "Change Quantity": "🔢",
+    "Edit Price": "✏️", "Remove Listing": "🗑️",
+  };
+  const control = new ButtonBuilder()
     .setCustomId(id)
     .setLabel(label)
     .setStyle(style)
     .setDisabled(disabled);
+  if (emojis[label]) control.setEmoji(emojis[label]);
+  return control;
+};
 const embed = (title, description) =>
   new EmbedBuilder()
     .setColor(RED)
@@ -39,8 +49,8 @@ function panel(game, s) {
     components = [];
   if (s.kind === "rules") {
     card = embed(
-      "Player Agreement",
-      "**Virtual currency:** Dark Coins have no cash value; no purchases, redemption, or real-money trading.\n\n**Chance:** Coinflip, dice, slots and duels use secure random outcomes. Winnings are never guaranteed; treasury games may be unavailable when unfunded.\n\n**Fair play:** No exploits, currency duplication, automation abuse, or alternate-account abuse.\n\n**Discord:** Follow Discord’s Terms, Community Guidelines and your server rules.\n\nAccept globally to unlock gameplay, or decline to remain locked.",
+      "📜 Player Agreement",
+      "**Virtual currency:** Dark Coins have no cash value; no purchases, redemption, or real-money trading.\n\n**Chance:** Coinflip, dice, slots and duels use secure random outcomes. Winnings are never guaranteed. Casino winnings are paid directly by Neox.\n\n**Fair play:** No exploits, currency duplication, automation abuse, or alternate-account abuse.\n\n**Discord:** Follow Discord’s Terms, Community Guidelines and your server rules.\n\nAccept globally to unlock gameplay, or decline to remain locked.",
     );
     components = [
       row(
@@ -50,7 +60,7 @@ function panel(game, s) {
     ];
   } else if (s.kind === "coinflip") {
     card = embed(
-      "Dark Coinflip",
+      "🪙 Dark Coinflip",
       "Choose a side, then enter your wager in the modal.\n\nHeads / tails: **50% each**. A win returns **2×** including stake; a loss returns **0**. Winnings are paid directly by Neox; no treasury funding is required.",
     );
     components = [
@@ -82,8 +92,8 @@ function panel(game, s) {
     if (v.stage === "browse" || !selected) {
       const shown = catalog.slice(page * PAGE, (page + 1) * PAGE);
       card = embed(
-        "Global Shop",
-        `**${v.category.toUpperCase()}** • Page ${page + 1}/${pages}\n\n${shown.map((x) => `${markdownName(x.name || x.id)} • **${x.price.toLocaleString("en-US")} Dark Coins**`).join("\n")}\n\nPurchase costs fund the shared treasury. No real-money payments.`,
+        "🛍️ Global Shop",
+        `**${v.category.toUpperCase()}** • Page ${page + 1}/${pages}\n\n${shown.map((x) => `${markdownName(x.name || x.id)} • **${x.price.toLocaleString("en-US")} Dark Coins**`).join("\n")}\n\nChoose an item, enter a quantity, then confirm your purchase.`,
       );
       components = [
         category,

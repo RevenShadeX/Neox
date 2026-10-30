@@ -104,8 +104,8 @@ function createClient(
   client.neoxRecovery = recovery;
   const errorText = (err) =>
     err instanceof GameError
-      ? err.message
-      : "Neox could not complete this action. Check history before retrying; no partial database transaction is committed.";
+      ? `⚠️ ${err.message}`
+      : "⚠️ Neox could not complete this action. Check history before retrying; no partial database transaction is committed.";
   const logError = (label, error) =>
     console.warn(label, error.code || error.name || "Error");
   const context = (s, interaction = false) => ({
@@ -212,7 +212,7 @@ function createClient(
         await transport.show(payload);
       } catch {
         await transport.fallback({
-          content: output.content,
+          content: "⚠️ Could not send your card. Check image attachment permissions and try again.",
           embeds: [],
           components: [],
           files: [],

@@ -1,6 +1,6 @@
 "use strict";
 const { ProfileRenderer, BoundedCache } = require("./profiles");
-const { cleanName, markdownName } = require("./text");
+const { cleanName } = require("./text");
 class ProfileService {
   constructor(
     client,
@@ -83,25 +83,30 @@ class ProfileService {
   }
   async payload(result, source = {}) {
     if (this.active >= this.maxConcurrent)
-      return { content: result.content, allowedMentions: { parse: [] } };
+      return {
+        content: "⏳ Card rendering is busy. Try again shortly.",
+        allowedMentions: { parse: [] },
+      };
     this.active++;
     try {
       const profile = result.presentation.profile,
         identity = await this.identity(profile, source),
         image = await this.renderer.render(profile, identity);
-      const content = result.content.replace(
-        markdownName(profile.displayName),
-        markdownName(identity.displayName),
-      );
       return image
         ? {
-            content,
+            content: "",
             files: [{ attachment: image, name: "neox-profile.png" }],
             allowedMentions: { parse: [] },
           }
-        : { content, allowedMentions: { parse: [] } };
+        : {
+        content: "⚠️ Could not render your card. Try again shortly.",
+        allowedMentions: { parse: [] },
+      };
     } catch {
-      return { content: result.content, allowedMentions: { parse: [] } };
+      return {
+        content: "⚠️ Could not render your card. Try again shortly.",
+        allowedMentions: { parse: [] },
+      };
     } finally {
       this.active--;
     }

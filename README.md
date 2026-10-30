@@ -201,3 +201,8 @@ node scripts/benchmark-profiles.js
 Tests include real SQLite transactions and worker concurrency, old/new schemas, all aliases, rules gating, bot-paid settlements for every outcome, shop ownership/modals/rollback, duels and consent, role escrow/timeout/restart/refund recovery, native profile PNG generation and mocked Discord API/interaction failures. `test-support/legacy-game.cjs` seeds explicit grandfathered test fixtures; production never imports it. Final measured test counts and release SHA are in the PR/commit and release report. Offline tests cannot certify your live token, Discord permissions or Wispbyte account settings.
 
 Core modules: `game.js` shared command services; `economy.js` mint/transfer/treasury invariants; `sessions.js` persistent owner/revision state; `ui.js` Discord component builders; `duels.js` atomic challenges/matchmaking; `role-shop.js` escrow/recovery; `discord-roles.js` authoritative role API adapter; `discord.js` transport and acknowledgements; `runtime.js` validated startup/shutdown; `migration-v3.js` additive storage; `leveling.js` exact curves; `profiles.js` bounded renderer. The optional Python coin-art authoring tool is not a runtime dependency.
+
+
+### Clean command presentation
+
+`level`, `rank`, and `profile` send the profile PNG alone, with no duplicate statistics message, through both prefix and slash commands. If rendering is busy or image delivery fails, Neox shows a brief retry notice instead of a wall of profile text. Main rewards, wallet/bank balances, hunting results, inventory, rankings and purchases use compact spacing and recognizable emojis. Shop buttons keep their text labels alongside emoji icons. The rules panel reflects direct bot-paid casino winnings.

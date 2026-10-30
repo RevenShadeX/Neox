@@ -639,7 +639,7 @@ test("duplicate Discord events announce one level-up and use actual server displ
   assert.match(announcements[0].embeds[0].description, /Level 1 → Level 2/);
   assert.equal(f.game.player(A).wallet, 10600);
 });
-test("prefix and slash profile aliases deliver actual in-memory attachments", async (t) => {
+test("prefix and slash level commands deliver image-only attachments", async (t) => {
   const f = fixture(t);
   const identities = [];
   const renderer = {
@@ -663,7 +663,7 @@ test("prefix and slash profile aliases deliver actual in-memory attachments", as
     guildId: "55555",
     id: "900000000000000080",
     createdTimestamp: Date.now(),
-    content: "Nprofile",
+    content: "Nlevel",
     channel: { send: async (p) => sends.push(p) },
   });
   await flush();
@@ -684,6 +684,8 @@ test("prefix and slash profile aliases deliver actual in-memory attachments", as
   });
   await flush();
   assert.equal(sends[1].files[0].name, "neox-profile.png");
+  assert.equal(sends[0].content, "");
+  assert.equal(sends[1].content, "");
   assert.equal(identities.length, 2);
   for (const command of [
     "N profile",
@@ -867,4 +869,23 @@ test("profile, level and rank each have real slash equivalents sharing one profi
     f.tick(10000);
     assert.equal(f.run(name).presentation.kind, "profile");
   }
+});
+
+
+test("card rendering errors and overload never repeat profile statistics", async () => {
+  const { ProfileService } = require("../src/profile-service");
+  const client = { users: { cache: new Map() }, isReady: () => false };
+  const result = { content: "PRIVATE PROFILE STATISTICS", presentation: { profile: card } };
+  for (const renderer of [
+    { render: async () => null },
+    { render: async () => { throw Error("render failed"); } },
+  ]) {
+    const service = new ProfileService(client, { renderer });
+    const payload = await service.payload(result);
+    assert.match(payload.content, /⚠️.*card/);
+    assert.ok(!payload.content.includes(result.content));
+    assert.equal(service.active, 0);
+  }
+  const busy = new ProfileService(client, { maxConcurrent: 0 });
+  assert.match((await busy.payload(result)).content, /⏳.*busy/);
 });
