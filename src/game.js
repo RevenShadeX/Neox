@@ -588,13 +588,16 @@ class Game {
       }
       case "sacrifice": {
         assert(a[0], "Usage: sacrifice monster-id|all [quantity]");
-        const rows = a[0] === "all"
-          ? this.sql("SELECT item,qty FROM inventory WHERE user=? AND kind='animal'").all(id)
+        const rarity = C.rarities.find((x) => x.toLowerCase() === a[0]);
+        const bulk = a[0] === "all" || !!rarity;
+        assert(!bulk || !a[1], "Bulk selection does not accept a quantity.");
+        const rows = bulk
+          ? this.sql("SELECT item,qty FROM inventory WHERE user=? AND kind='animal'").all(id).filter((r) => !rarity || find(C.animals, r.item).rarity === rarity)
           : [{ item: find(C.animals, a[0]).id, qty: this.qty(id, "animal", a[0]) }];
         let total = 0, sacrificed = 0;
         for (const row of rows) {
           const animal = find(C.animals, row.item);
-          const qty = a[0] === "all" ? Math.max(0, row.qty - 1) : a[1] ? n(a[1], 1, 1000000) : 1;
+          const qty = bulk ? Math.max(0, row.qty - 1) : a[1] ? n(a[1], 1, 1000000) : 1;
           if (!qty) continue;
           assert(qty <= row.qty, "Not enough monsters.");
           const essence = [1, 2, 4, 8, 16, 32, 64, 128][animal.tier] * qty;
@@ -621,13 +624,16 @@ class Game {
       }
       case "sellanimals": {
         assert(a[0], "Usage: sellmonsters monster-id|all [quantity]");
-        assert(a[0] !== "all" || !a[1], "Use sellmonsters all without a quantity.");
-        const rows = a[0] === "all"
-          ? this.sql("SELECT item,qty FROM inventory WHERE user=? AND kind='animal'").all(id)
+        
+        const rarity = C.rarities.find((x) => x.toLowerCase() === a[0]);
+        const bulk = a[0] === "all" || !!rarity;
+        assert(!bulk || !a[1], "Bulk selection does not accept a quantity.");
+        const rows = bulk
+          ? this.sql("SELECT item,qty FROM inventory WHERE user=? AND kind='animal'").all(id).filter((r) => !rarity || find(C.animals, r.item).rarity === rarity)
           : [{ item: find(C.animals, a[0]).id, qty: this.qty(id, "animal", a[0]) }];
         let count = 0, earned = 0;
         for (const row of rows) {
-          const quantity = a[0] === "all" ? Math.max(0, row.qty - 1) : a[1] ? n(a[1], 1, 1000000) : 1;
+          const quantity = bulk ? Math.max(0, row.qty - 1) : a[1] ? n(a[1], 1, 1000000) : 1;
           if (!quantity) continue;
           const animal = find(C.animals, row.item);
           assert(quantity <= row.qty, "Not enough monsters.");
