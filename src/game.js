@@ -826,6 +826,7 @@ class Game {
               ];
         let opened = 0;
         const rewards = new Map();
+        const rareFinds = [];
         const add = (s) => rewards.set(s, (rewards.get(s) || 0) + 1);
         for (const row of rows) {
           if (opened >= 50) break;
@@ -870,6 +871,7 @@ class Game {
                   );
                   this.animal(id, animal, 1);
                   add(`${animal.id} ${animal.name}`);
+                  if (animal.tier >= 4) rareFinds.push({ name: animal.name, rarity: animal.rarity, type: "companion", id: animal.id, tier: animal.tier });
                 } else {
                   const e = this.rng.pick(
                     C.equipment.filter(
@@ -884,6 +886,7 @@ class Game {
                   );
                   const gid = this.giveGear(id, e.id);
                   add(`#${gid} ${e.id}`);
+                  if (e.tier >= 4) rareFinds.push({ name: e.name, rarity: e.rarity, type: e.type, id: e.id, gearId: String(gid), attack: e.attack, defense: e.defense, ability: e.ability, tier: e.tier });
                 }
               }
             }
@@ -892,7 +895,10 @@ class Game {
         }
         assert(opened > 0, "No boxes to open.");
         // Loot boxes grant items only; currency creation is restricted.
-        return `Opened ${opened} boxes • monster and item rewards\n${[...rewards].map(([s, q]) => `${s} ×${q}`).join("\n")}`;
+        return {
+          content: `Opened ${opened} boxes • monster and item rewards\n${[...rewards].map(([s, q]) => `${s} ×${q}`).join("\n")}`,
+          presentation: { kind: "loot", opened, rareFinds: rareFinds.slice(0, 5) },
+        };
       }
       case "pet": {
         if (a[0]) {
