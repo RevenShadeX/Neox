@@ -933,16 +933,21 @@ class Game {
           : null;
         assert(!enemyId || enemy, "That player must play Neox first.");
         if (enemyId) this.cooldown(id, `rival:${enemyId}`, 3600000);
+        const stage = !boss && !enemy ? (this.sql("SELECT stage FROM battle_stages WHERE user=?").get(id)?.stage || 1) : null;
+        const stageBoss = stage !== null && stage % 10 === 0;
+        const elite = stage !== null && stage % 50 === 0;
+        const scale = stage === null ? 0 : stage - 1;
         const me = this.stats(id),
           foe = enemy
             ? this.stats(enemyId)
             : {
-                attack: (boss ? 22 : 12) + level(p) * (boss ? 4 : 3),
-                defense: (boss ? 10 : 5) + level(p) * (boss ? 3 : 2),
-                abilities: boss ? ["force", "guard"] : ["force"],
+                attack: (boss ? 22 : 12) + level(p) * (boss ? 4 : 3) + Math.floor(scale * 1.5) + (stageBoss ? 10 : 0) + (elite ? 15 : 0),
+                defense: (boss ? 10 : 5) + level(p) * (boss ? 3 : 2) + Math.floor(scale * 1.1) + (stageBoss ? 7 : 0) + (elite ? 10 : 0),
+                abilities: boss || stageBoss ? ["force", "guard"] : ["force"],
               };
         let hp = 100,
-          ehp = boss ? 160 : 100;
+          ehp = boss ? 160 : stage !== null ? 100 + Math.floor(scale * 8) + (stageBoss ? 80 : 0) + (elite ? 120 : 0) : 100;
+        const enemyMaxHP = ehp;
         const log = [];
         const strike = (att, def) => {
           let damage = Math.max(
@@ -968,6 +973,8 @@ class Game {
         const won = hp > 0 && (ehp <= 0 || hp > ehp),
           draw = hp > 0 && hp === ehp;
         const reward = 0;
+        if (stage !== null && won && !draw && stage < 1000000000)
+          this.sql("INSERT INTO battle_stages(user,stage) VALUES(?,?) ON CONFLICT(user) DO UPDATE SET stage=excluded.stage").run(id, stage + 1);
         // Battles grant progression only; no new Dark Coins.
         this.sql(
           "UPDATE players SET battles_total=battles_total+1 WHERE id=?",
@@ -994,11 +1001,12 @@ class Game {
           );
         }
         return {
-          content: `${enemy ? `Ranked spar against <@${enemyId}>` : boss ? "Boss battle against the Sovereign of the Rift" : "Expedition against a Rift Sentinel"}\n${log.join("\n")}\n${draw ? "Draw" : won ? "Victory" : "Defeat"} • +0 Dark Coins • ${won ? 35 : 15} hunting XP\nRanked sparring uses saved equipment; no opponent coins are taken.`,
+          content: `${enemy ? `Ranked spar against <@${enemyId}>` : boss ? "Boss battle against the Sovereign of the Rift" : `Expedition Stage ${stage} against ${elite ? "the Eternal Rift Sovereign" : stageBoss ? "a Rift Overlord" : "a Rift Sentinel"}`}\n${log.join("\n")}\n${draw ? "Draw" : won ? "Victory" : "Defeat"} • +0 Dark Coins • ${won ? 35 : 15} hunting XP\nRanked sparring uses saved equipment; no opponent coins are taken.`,
           presentation: {
             kind: "card", command: name,
             combat: { won, draw, hp: Math.max(0, hp), enemyHP: Math.max(0, ehp),
-              enemy: enemy ? `<@${enemyId}>` : boss ? "Sovereign of the Rift" : "Rift Sentinel",
+              enemy: enemy ? `<@${enemyId}>` : boss ? "Sovereign of the Rift" : elite ? "Eternal Rift Sovereign" : stageBoss ? "Rift Overlord" : "Rift Sentinel",
+              stage, stageBoss, elite, enemyMaxHP, nextStage: stage === null ? null : stage + (won && !draw && stage < 1000000000 ? 1 : 0),
               log, xp: won ? 35 : 15 },
           },
         };
