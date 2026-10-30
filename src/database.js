@@ -37,6 +37,7 @@ function open(filename = "./data/neox.sqlite") {
  CREATE INDEX IF NOT EXISTS rankings_wealth ON players((wallet+bank) DESC,id);
  CREATE INDEX IF NOT EXISTS rankings_hunt ON players(xp DESC,id);
  CREATE INDEX IF NOT EXISTS rankings_battle ON players(rating DESC,id);
+ CREATE TABLE IF NOT EXISTS battle_stages(user TEXT PRIMARY KEY REFERENCES players(id),stage INTEGER NOT NULL DEFAULT 1 CHECK(stage BETWEEN 1 AND 1000000000));
  CREATE TABLE IF NOT EXISTS guilds(id TEXT PRIMARY KEY,prefix TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS inventory(user TEXT NOT NULL REFERENCES players(id),kind TEXT NOT NULL,item TEXT NOT NULL,
  qty INTEGER NOT NULL CHECK(typeof(qty)='integer' AND qty BETWEEN 0 AND 1000000),PRIMARY KEY(user,kind,item));
@@ -45,6 +46,8 @@ function open(filename = "./data/neox.sqlite") {
  level INTEGER NOT NULL DEFAULT 1 CHECK(level BETWEEN 1 AND 10),enhance INTEGER NOT NULL DEFAULT 0 CHECK(enhance BETWEEN 0 AND 5),slot TEXT);
  CREATE UNIQUE INDEX IF NOT EXISTS equipped_slot ON gear(user,slot) WHERE slot IS NOT NULL;
  CREATE INDEX IF NOT EXISTS gear_owner ON gear(user,id);
+ CREATE TABLE IF NOT EXISTS gear_condition(gear INTEGER PRIMARY KEY REFERENCES gear(id) ON DELETE CASCADE, condition INTEGER NOT NULL DEFAULT 100 CHECK(condition BETWEEN 0 AND 100));
+ CREATE TABLE IF NOT EXISTS armor_infusions(gear INTEGER PRIMARY KEY REFERENCES gear(id) ON DELETE CASCADE, defense INTEGER NOT NULL DEFAULT 0 CHECK(defense BETWEEN 0 AND 200));
  CREATE TABLE IF NOT EXISTS effects(user TEXT NOT NULL REFERENCES players(id),kind TEXT NOT NULL,item TEXT NOT NULL,expires INTEGER NOT NULL,uses INTEGER NOT NULL,PRIMARY KEY(user,kind));
  CREATE TABLE IF NOT EXISTS cooldowns(user TEXT NOT NULL,command TEXT NOT NULL,until INTEGER NOT NULL,PRIMARY KEY(user,command));
  CREATE TABLE IF NOT EXISTS claims(user TEXT NOT NULL,key TEXT NOT NULL,PRIMARY KEY(user,key));

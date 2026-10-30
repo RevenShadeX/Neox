@@ -12,7 +12,10 @@ const { serverPermissions } = require("./permissions");
 const { commands, registry, normalizeArguments } = require("./commands");
 const { parsePrefix, parseArguments } = require("./parser");
 const { presentCoinflip, levelUpPayload } = require("./presentation");
+const { presentSlots } = require("./slots-presentation");
 const { EmojiResolver } = require("./emojis");
+const { decoratePayload } = require("./emoji-decorate");
+const { lootImage, battleImage } = require("./visual-cards");
 const { ProfileService } = require("./profile-service");
 const { RoleRecovery } = require("./role-shop");
 const { roleAPI } = require("./discord-roles");
@@ -184,6 +187,14 @@ function createClient(
       }
   }
   async function deliver(output, source, transport) {
+    const original = transport;
+    transport = {
+      ...original,
+      show: (p) => original.show(decoratePayload(p, emojis)),
+      extra: (p) => original.extra(decoratePayload(p, emojis)),
+      fallback: (p) => original.fallback(decoratePayload(p, emojis)),
+      finish: (sent, p) => original.finish(sent, decoratePayload(p, emojis)),
+    };
     const p = output.presentation;
     if (p?.kind === "modal") {
       await source.showModal(UI.modal(p));
@@ -207,7 +218,9 @@ function createClient(
       await duelDelivery.bind(p.id, source, message);
       return;
     }
-    if (p?.kind === "coinflip")
+    if (p?.kind === "slots")
+      await presentSlots(output, transport, emojis, animation);
+    else if (p?.kind === "coinflip")
       await presentCoinflip(output, transport, {
         ...animation,
         emojis: emojiContext(source),
@@ -230,8 +243,21 @@ function createClient(
           allowedMentions: UI.allowedMentions,
         });
       }
+    } else if (p?.kind === "loot") {
+      const parts = chunks(output.content);
+      await transport.show({ content: parts[0], embeds: [], attachments: [], files: [], allowedMentions: UI.allowedMentions });
+      for (const content of parts.slice(1)) await transport.extra({ content, allowedMentions: UI.allowedMentions });
+      for (const item of p.rareFinds || []) {
+        const payload = { content: `✨ **${item.rarity.toUpperCase()} DROP!** • ${item.name}`, allowedMentions: UI.allowedMentions };
+        try { await transport.extra({ ...payload, files: [lootImage(item)] }); }
+        catch (e) { logError("Loot artwork unavailable:", e); await transport.extra(payload); }
+      }
     } else if (p?.kind === "card") {
       const cards = UI.commandCards(output);
+      if (p.combat) {
+        try { cards[0].files = [battleImage(p)]; }
+        catch (e) { logError("Battle artwork unavailable:", e); }
+      }
       await transport.show(cards[0]);
       for (const card of cards.slice(1)) await transport.extra(card);
     } else {
@@ -490,7 +516,7 @@ function createClient(
     tick();
     timer = setInterval(tick, 15000);
     timer.unref();
-    if (Object.keys(emojis.config).length)
+    if (client.application?.emojis)
       client.application.emojis
         .fetch()
         .then((found) => emojis.observeApplication(found.values()))

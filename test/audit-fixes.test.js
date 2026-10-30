@@ -90,7 +90,7 @@ for (const slash of [false, true]) for (const action of ["RANDOM", "ACCEPT"]) {
     } else client.emit(Events.MessageCreate, { author: user, guild, guildId: G, id: f.ctx().requestId, createdTimestamp: Date.now(), content: `N DUEL ${args}`, channel: { send: async (p) => sent.push(p) } });
     await flush();
     assert.equal(sent.length, 1);
-    if (action === "RANDOM") assert.match(sent[0].embeds[0].toJSON().title, /Matchmaking/);
+    if (action === "RANDOM") assert.match(JSON.parse(JSON.stringify(sent[0].embeds[0])).title, /Matchmaking/);
     else assert.match(sent[0].content, /rolled/);
   });
 }

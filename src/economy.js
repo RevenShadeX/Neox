@@ -5,6 +5,7 @@ const TREASURY_MAX = 8_000_000_000_000_000;
 const MINT_SOURCES = new Set([
   "daily",
   "hunting",
+  "monster sales",
   "level rewards",
   "pending level rewards",
 ]);
@@ -43,10 +44,14 @@ class Economy {
     const expected = {
       daily: "daily",
       hunting: "hunt",
+      "monster sales": ["sellanimals", "sell"],
       "level rewards": "level",
       "pending level rewards": "levelrewards",
     }[source];
-    assert(this.game.mintScope === expected, "Unauthorized currency source.");
+    assert(
+      Array.isArray(expected) ? expected.includes(this.game.mintScope) : this.game.mintScope === expected,
+      "Unauthorized currency source.",
+    );
     assert(
       Number.isSafeInteger(amount) && amount > 0 && amount <= MAX,
       "Invalid mint amount.",

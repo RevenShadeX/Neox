@@ -145,6 +145,9 @@ const validArgs = {
   zoo: [],
   animals: ["A001"],
   sellanimals: ["A001", "1"],
+  sacrifice: ["A001", "1"],
+  repair: ["1"],
+  infuse: ["3", "1"],
   huntstats: [],
   collection: ["CLAIM"],
   inventory: [],
@@ -206,6 +209,8 @@ function prepare(f, command) {
   f.game.item(A, "box", "gem", 2);
   f.game.giveGear(A, "sword1");
   f.game.giveGear(A, "bow1");
+  if (command === "repair") f.store.sql("INSERT INTO gear_condition(gear,condition) VALUES(1,50)").run();
+  if (command === "infuse") { f.game.giveGear(A, "armor1"); f.game.item(A, "essence", "rift", 5); }
   if (command === "accept" || command === "cancel") {
     const seller = command === "accept" ? B : A,
       buyer = seller === A ? B : A;
@@ -238,10 +243,6 @@ for (const [name, definition] of Object.entries(commands)) {
             const parsed = parsePrefix(content);
             assert.equal(parsed.command, name);
             assert.deepEqual(parsed.args, validArgs[name]);
-            if (name === "pay") {
-              assert.throws(() => f.message(content), /gifting is disabled/);
-              return;
-            }
             const result = f.message(content);
             assert.ok(result.content.length);
             if (name === "prefix")
@@ -339,7 +340,7 @@ test("prefix matching is literal and honors multi-character and server settings"
     assert.equal(f.game.getPrefix("55555"), "n");
     f.run("prefix", ["Z"]);
     assert.equal(parsePrefix("n hunt", f.game.getPrefix("55555")), null);
-    assert.equal(f.message("zHUNT").content.includes("You found"), true);
+    assert.equal(f.message("zHUNT").content.includes("HUNT COMPLETE"), true);
     assert.equal(f.game.getPrefix("66666"), "n");
     f.run("prefix", ["$."]);
     assert.equal(f.message("$.BALANCE").content.includes("Dark Coins"), true);
@@ -549,7 +550,7 @@ test("animation changes GIF to the committed skull/crown result without rerollin
           },
           fallback: async () => assert.fail("Unexpected fallback"),
         },
-        { sleep: async (ms) => assert.equal(ms, 2000) },
+        { sleep: async (ms) => assert.equal(ms, 850) },
       );
       assert.equal(calls[0].files[0].name, "dark-coin-spin.gif");
       assert.deepEqual(calls[0].embeds, []);

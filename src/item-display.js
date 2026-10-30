@@ -10,7 +10,7 @@ function itemIcon(item, kind) {
 }
 function inventoryLabel(kind, id) {
   const catalog = { animal: C.animals, gem: C.gems, box: C.boxes }[kind] || [];
-  const item = catalog.find((x) => x.id === id) || { id, name: id === "food" ? "Companion Rations" : id };
+  const item = catalog.find((x) => x.id === (kind === "gem" ? id.replace(/-(50|100|500|1000)$/, "") : id)) || { id, name: id === "food" ? "Companion Rations" : id };
   return `${itemIcon(item, kind)} ${item.name || id} (${id})`;
 }
 module.exports = { itemIcon, inventoryLabel };

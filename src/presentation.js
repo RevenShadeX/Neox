@@ -34,7 +34,7 @@ function coinflipPayload(
 async function presentCoinflip(
   result,
   transport,
-  { sleep = delay, duration = 2000, ...options } = {},
+  { sleep = delay, duration = 850, ...options } = {},
 ) {
   const final = coinflipPayload(result, false, options);
   let message;

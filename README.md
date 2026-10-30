@@ -37,9 +37,9 @@ For a 512 MB host, optionally set `NODE_OPTIONS=--max-old-space-size=192` to lea
 
 ## Economy and funding policy
 
-**Daily rewards, monster hunting, global level-up rewards and casino winnings create coins.** Minting is centrally scoped and transaction-guarded. New accounts start with **zero** coins; existing balances are preserved. Daily pays 1,200 coins and a daily cache every 24 hours. Hunting rewards depend on rarity, with a 20-second cooldown. Global level rewards use the configured curve below.
+**Daily rewards, monster hunting, global level-up rewards, monster sales and casino winnings create coins.** Minting is centrally scoped and transaction-guarded. New accounts start with **zero** coins; existing balances are preserved. Daily pays 1,200 coins and a daily cache every 24 hours. Hunting rewards depend on rarity, with a 20-second cooldown. Global level rewards use the configured curve below.
 
-Weekly gives two gem caches, work gives three Companion Rations, quests grant XP, battles/bosses grant progression, and collection milestones grant item caches. Releasing monsters, disposing of equipment and opening loot caches give **no direct currency**. Monster threat/value scores are collection metadata, not redemption prices. `pay` remains a compatibility command that explicitly rejects gifting. Equipment trades transfer existing coins for equipment. Own-wallet bank deposits/withdrawals remain available.
+Weekly gives two gem caches, work gives three Companion Rations, quests grant XP, battles/bosses grant progression, and collection milestones grant item caches. Monster sales pay one quarter of each monster’s base value, rounded down, per sold copy. Bulk sales keep one of each species. Disposing of equipment and opening loot caches give **no direct currency**. `pay @user amount` opens an owner-bound confirmation; it transfers existing coins only when confirmed. Equipment trades transfer existing coins for equipment. Own-wallet bank deposits/withdrawals remain available.
 
 ### Bot-paid gambling
 
@@ -71,7 +71,7 @@ Prefix and slash commands use the same services. Canonical names are registered 
 | cash (balance, bal, wallet) | — | Wallet and bank |
 | deposit (dep) | amount / all | Move Dark Coins into your bank |
 | withdraw (with) | amount / all | Withdraw banked coins |
-| pay | @user amount | Direct currency gifting is disabled |
+| pay | @user amount | Confirm a transfer of existing Dark Coins |
 | weekly | — | Claim weekly item supplies |
 | work | — | Work for companion supplies |
 | treasury | [fund amount] | View or fund the legacy treasury (not needed for gambling) |
@@ -86,7 +86,7 @@ Prefix and slash commands use the same services. Canonical names are registered 
 | hunt (h) | — | Hunt monsters and earn Dark Coins and XP |
 | zoo (monsters) | [page] | Your monster collection |
 | animals (bestiary) | [page / monster-id] | Monster catalogue and probabilities |
-| sellanimals (release, sellmonsters) | monster-id / all [quantity] | Release duplicate monsters; no Dark Coin reward |
+| sellanimals (release, sellmonsters) | monster-id / all / rarity [quantity] | Sell monsters; bulk selection keeps one per species |
 | huntstats | — | Hunting progression |
 | collection | [claim] | Discover species and claim milestones |
 | inventory (inv, i) | [page] | Items and equipment |
@@ -101,7 +101,7 @@ Prefix and slash commands use the same services. Canonical names are registered 
 | compare | gear-id gear-id | Compare two owned items |
 | shop (sh) | [page] | Browse boxes, gems and equipment |
 | buy | item-id [quantity] | Purchase items |
-| sell | gear-id | Sell unequipped equipment |
+| sell (s) | gear-id / monster-id / all / rarity [quantity] | Sell monsters or dispose of unequipped gear |
 | boxes | — | Box inventory |
 | open | box-id / all [quantity / all] | Open up to 50 boxes |
 | boxinfo | box-id | Published reward probabilities |
@@ -241,7 +241,7 @@ Available categories: start, coins, hunting, items, gear, combat, games, progres
 
 ### Wispbyte startup troubleshooting (npm 12)
 
-If the log reports **`Command alias collision: sell`**, Neox has rejected an ambiguous command definition. The shipped registry keeps `sell` for equipment disposal and `release` / `sellmonsters` for monsters. Repeated aliases for the same handler are harmless; assigning one alias to different handlers still fails with both conflicting command names. Deploy the complete current `src/` from `audit/global-stability-storage` so hosted files are consistent, preserving your private `.env` and persistent `data/`. Do not attach `sell` as an alias to another command.
+If the log reports **`Command alias collision: sell`**, Neox has rejected an ambiguous command definition. The corrected registry routes `sell` / `s` by argument: numeric IDs dispose of gear; monster IDs, rarities and `all` sell monsters. Explicit `release` / `sellmonsters` also sell monsters. Repeated aliases for the same handler are harmless; assigning one alias to different handlers still fails with both conflicting command names. Deploy the complete current `src/` from `audit/global-stability-storage` so hosted files are consistent, preserving your private `.env` and persistent `data/`. Do not attach `sell` as an alias to another command.
 
 The lockfile currently selects **better-sqlite3 12.11.1**. `package.json` includes the version-pinned npm 12 `allowScripts` approval for its native build. A clean npm 12 installation and a real in-memory SQLite query have been verified. Other dependency scripts are not blanket-approved. When intentionally updating SQLite, review its native installer and update the pinned approval to match the new lockfile.
 
@@ -257,3 +257,16 @@ Use **`npm start`** as the normal startup command, rather than reinstalling and 
 Application emojis uploaded in the Developer Portal work without the server's Use External Emojis permission. External emojis from a different server still need that permission. Set the supported emoji IDs in private configuration; unknown/unavailable IDs use Unicode fallbacks.
 
 Random matchmaking persists the original queue message location in expiring UI state and updates it with match controls. Transient notification failures retry on the bounded background tick; the original Cancel Search control can cancel its linked pending match. If Discord cannot edit the original message, typed `duel accept`, `duel decline`, and `duel cancel` remain available. Both players must accept, and no coins move before settlement.
+
+
+### Preserved gameplay upgrades
+
+The reviewed release includes confirmed player payments, endless Rift stages, battle Weapon Cache drops, cinematic battle/rare-loot cards, animated slots, the named Neox application emoji pack, and rarity-grouped hunting/inventory views.
+
+- `sacrifice monster-id [quantity]`, `sacrifice rarity`, or `sacrifice all` converts monsters to Rift Essence. Bulk selections keep one of each species.
+- `infuse armor-id [amount]` consumes essence for permanent defense, up to +200 per armor piece.
+- Equipped gear loses 1–4 condition points per fight. At zero condition it retains half its base/upgrade/enhancement stats. `repair gear-id` or `repair all` charges Dark Coins and restores condition to 100; infusions are preserved.
+- Gem drops can have `-50`, `-100`, `-500`, or `-1000` use suffixes. Activate the full gem ID. These variants have a 30-day activation window, still limited by remaining hunts and one active gem per category.
+- `help battle` explains stages, ranked sparring, equipment, repairs and infusions in an embed using the current server prefix.
+
+Large loot summaries split into safe Discord messages, with rare-drop images in separate follow-ups. Emoji decoration falls back to readable Unicode when custom markup would exceed Discord text limits.

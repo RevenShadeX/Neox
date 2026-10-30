@@ -59,6 +59,15 @@ function panel(game, s) {
         button(id("decline"), "Decline"),
       ),
     ];
+  } else if (s.kind === "payment") {
+    card = embed(
+      "Confirm Payment",
+      `Send **${v.amount.toLocaleString("en-US")} Dark Coins** to <@${v.recipient}>?\n\nThis transfer is final. No coins will move until you confirm.`,
+    );
+    components = [row(
+      button(id("confirm"), "Confirm Payment", ButtonStyle.Danger),
+      button(id("cancel"), "Cancel"),
+    )];
   } else if (s.kind === "coinflip") {
     card = embed(
       "🪙 Dark Coinflip",
@@ -312,11 +321,11 @@ function commandCards(output) {
     const c = p.combat;
     const card = embed(
       `${p.command === "boss" ? "👹 Boss Battle" : "⚔️ Battle"} • ${c.draw ? "🤝 Draw" : c.won ? "🏆 Victory" : "💀 Defeat"}`,
-      `Opponent: **${c.enemy}**`,
+      `Opponent: **${c.enemy}**${c.stage != null ? `\n⚔️ **Endless Rift • Stage ${c.stage.toLocaleString("en-US")}**${c.elite ? " • ELITE BOSS" : c.stageBoss ? " • BOSS" : ""}\n${c.won ? `Stage cleared! Next: ${c.nextStage.toLocaleString("en-US")}` : "Stage not cleared • Improve your equipment and retry."}` : ""}`,
     ).setColor(c.draw ? 0xf59e0b : c.won ? 0x10b981 : RED)
       .addFields(
         { name: "❤️ Your health", value: `${c.hp} / 100 HP`, inline: true },
-        { name: "🛡️ Opponent health", value: `${c.enemyHP} / ${p.command === "boss" ? 160 : 100} HP`, inline: true },
+        { name: "🛡️ Opponent health", value: `${c.enemyHP} / ${c.enemyMaxHP || (p.command === "boss" ? 160 : 100)} HP`, inline: true },
         { name: "✨ Progress", value: `+${c.xp} hunting XP`, inline: true },
         { name: "📜 Battle rounds · You / Opponent", value: `\`\`\`\n${c.log.join("\n")}\n\`\`\`` },
       ).setFooter({ text: "Neox • Saved equipment combat • No opponent coins taken" });

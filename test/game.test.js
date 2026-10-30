@@ -88,11 +88,11 @@ test("insufficient and overflow equipment payments roll back both accounts", (t)
   assert.throws(() => f.run("accept", ["1"]), /enough/);
   assert.equal(f.game.player(A).wallet, before);
 });
-test("direct currency gifting is disabled without changing either player balance", (t) => {
+test("payment preparation changes neither player balance before confirmation", (t) => {
   const f = fixture(t);
   f.run("cash");
   f.run("cash", [], B);
-  assert.throws(() => f.run("pay", [B, "200"]), /gifting is disabled/);
+  assert.match(f.run("pay", [B, "200"], A, { guildId: "55555" }), /payment panel/);
   assert.equal(f.game.player(A).wallet, 500);
   assert.equal(f.game.player(B).wallet, 500);
 });
@@ -121,7 +121,7 @@ test("duplicate requests cannot replay payments even after command cooldown", (t
 });
 test("hunting grants animals, XP and streaks while enforcing cooldown", (t) => {
   const f = fixture(t);
-  assert.match(f.run("hunt"), /You found/);
+  assert.match(f.run("hunt"), /HUNT COMPLETE/);
   const p = f.game.player(A);
   assert.equal(p.hunts, 1);
   assert.ok(p.xp > 0);
@@ -140,7 +140,7 @@ test("animal selling keeps discoveries and all preserves one per stack", (t) => 
   f.game.animal(A, C.animals[0], 3);
   f.run("sellanimals", ["all"]);
   assert.equal(f.game.qty(A, "animal", "a001"), 1);
-  assert.equal(f.game.player(A).wallet, 500);
+  assert.equal(f.game.player(A).wallet, 500 + 2 * Math.floor(C.animals[0].value / 4));
   assert.equal(
     f.store.sql("SELECT COUNT(*) AS n FROM discoveries WHERE user=?").get(A).n,
     1,
@@ -456,9 +456,14 @@ test("prefix and slash adapters call the same engine and enforce permissions", a
 test("payment cannot manufacture starting balances for arbitrary recipient IDs", (t) => {
   const f = fixture(t);
   f.run("cash");
-  assert.throws(() => f.run("pay", [B, "1"]), /gifting is disabled/);
-  assert.equal(f.game.player(A).wallet, 500);
+  const { Game: RealGame } = require("../src/game");
+  const real = new RealGame(f.store, { clock: () => 1900000000000 });
+  const ctx = { userId: A, guildId: "55555" };
+  const panel = real.executeResult("pay", [B, "1"], ctx).presentation.session;
   assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM players").get().n, 1);
+  real.interact(require("../src/ui").cid(panel, "confirm"), {}, ctx);
+  assert.equal(real.player(A).wallet, 499);
+  assert.equal(real.player(B).wallet, 1);
 });
 test("secure weighted sampler rejects invalid tables before drawing", () => {
   const { weighted, int } = require("../src/random");

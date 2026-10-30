@@ -107,6 +107,17 @@ class Sessions {
       this.save(s, true);
       return typeof result === "string" ? { content: result } : result;
     }
+    if (s.kind === "payment") {
+      assert(action === "confirm", "Unknown payment action.");
+      const recipient = v.recipient;
+      const amount = v.amount;
+      assert(/^\d{5,22}$/.test(recipient) && recipient !== ctx.userId, "Invalid recipient.");
+      assert(Number.isSafeInteger(amount) && amount > 0 && amount <= MAX, "Invalid payment amount.");
+      g.player(recipient);
+      g.economy.transfer(ctx.userId, recipient, amount, "player payment");
+      this.save(s, true);
+      return { content: `✅ Payment confirmed: **${amount.toLocaleString("en-US")} Dark Coins** sent to <@${recipient}>. Remaining wallet: **${g.player(ctx.userId).wallet.toLocaleString("en-US")} Dark Coins**.` };
+    }
     if (s.kind === "coinflip") {
       if (action === "h" || action === "t")
         return this.modal(

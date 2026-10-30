@@ -243,8 +243,11 @@ class Game {
     const abilities = [];
     for (const g of rows) {
       const b = C.equipment.find((e) => e.id === g.item);
-      attack += b.attack + 2 * (g.level - 1) + g.enhance * 3;
-      defense += b.defense + (g.level - 1) + g.enhance * 2;
+      const condition = this.sql("SELECT condition FROM gear_condition WHERE gear=?").get(g.id)?.condition ?? 100;
+      const effectiveness = 0.5 + condition / 200;
+      attack += Math.floor((b.attack + 2 * (g.level - 1) + g.enhance * 3) * effectiveness);
+      defense += Math.floor((b.defense + (g.level - 1) + g.enhance * 2) * effectiveness);
+      if (g.slot === "armor") defense += this.sql("SELECT defense FROM armor_infusions WHERE gear=?").get(g.id)?.defense || 0;
       abilities.push(b.ability);
     }
     const p = this.player(id);
@@ -262,7 +265,7 @@ class Game {
       "SELECT * FROM effects WHERE user=? AND expires>? AND uses>0",
     )
       .all(id, this.clock())
-      .map((e) => ({ ...C.gems.find((g) => g.id === e.item), ...e }));
+      .map((e) => ({ ...C.gems.find((g) => g.id === e.item.replace(/-(50|100|500|1000)$/, "")), ...e }));
   }
   bonus(id) {
     return Object.fromEntries(this.active(id).map((e) => [e.kind, e.bonus]));
@@ -345,12 +348,14 @@ class Game {
         }
         return "🔒 Rules declined. Gameplay is locked until you accept the rules.";
       }
-      case "pay":
-        assert(
-          false,
-          "Direct Dark Coin gifting is disabled. Equipment trades remain available.",
-        );
-        break;
+      case "pay": {
+        assert(a.length === 2, "Usage: pay @user amount");
+        const recipient = userId(a[0]);
+        const amount = n(a[1]);
+        assert(recipient !== id, "You cannot pay yourself.");
+        assert(p.wallet >= amount, "Not enough Dark Coins.");
+        return this.sessions.create("payment", ctx, { recipient, amount });
+      }
       case "weekly":
         this.cooldown(id, "weekly", 604800000);
         this.item(id, "box", "gem", 2);
@@ -466,7 +471,7 @@ class Game {
         )
           .safeIntegers(true)
           .get().n;
-        return `${fmt(t.players)} players • ${fmt(t.wallet)} wallet Dark Coins • ${fmt(t.bank)} bank Dark Coins\nTreasury: ${fmt(this.economy.treasury())} • role escrow: ${fmt(held)} • held refunds: ${fmt(refunds)}\nNew coins: daily, monster hunting, global levels and casino winnings. No real-world value.`;
+        return `${fmt(t.players)} players • ${fmt(t.wallet)} wallet Dark Coins • ${fmt(t.bank)} bank Dark Coins\nTreasury: ${fmt(this.economy.treasury())} • role escrow: ${fmt(held)} • held refunds: ${fmt(refunds)}\nNew coins: daily, monster hunting, global levels, monster sales and casino winnings. No real-world value.`;
       }
       case "leaderboard": {
         const mode = a[0] || "wealth";
@@ -537,19 +542,37 @@ class Game {
         this.sql(
           "UPDATE effects SET uses=uses-1 WHERE user=? AND expires>? AND uses>0",
         ).run(id, this.clock());
-        return `🐾 **Hunt complete!** You found:\n${found.map((x) => `${x.id} • ${x.name} [${x.rarity}]`).join("\n")}\n\n🪙 +${fmt(reward)} Dark Coins • ✨ +${fmt(xp)} hunting XP\n🔥 Streak ${streak} • 🎯 Hunting level ${level(this.player(id))}`;
+        const grouped = new Map();
+        for (const animal of found) {
+          const key = animal.id;
+          const entry = grouped.get(key) || { animal, qty: 0 };
+          entry.qty++;
+          grouped.set(key, entry);
+        }
+        const ordered = [...grouped.values()].sort((a, b) => b.animal.tier - a.animal.tier || a.animal.id.localeCompare(b.animal.id));
+        const sections = [];
+        for (const rarity of [...C.rarities].reverse()) {
+          const rows = ordered.filter((entry) => entry.animal.rarity === rarity);
+          if (rows.length) sections.push(`**${rarity.toUpperCase()}**\n${rows.map(({ animal, qty }) => `${animal.id} • ${animal.name}${qty > 1 ? ` ×${qty}` : ""}`).join("\n")}`);
+        }
+        const boosts = Object.entries(b).map(([kind, bonus]) => `${kind} +${Math.round(bonus * 100)}%`).join(" • ");
+        return `**NEOX • HUNT COMPLETE**\n\n${sections.join("\n\n")}\n\n**REWARDS**\n🪙 +${fmt(reward)} Dark Coins • ✨ +${fmt(xp)} hunting XP\n🔥 Streak ${streak} • 🎯 Hunting level ${level(this.player(id))}${boosts ? `\n💎 Active gems: ${boosts}` : ""}\n\nManual hunt • 20s cooldown`;
       }
       case "zoo": {
         const rows = this.sql(
           "SELECT item,qty FROM inventory WHERE user=? AND kind='animal' ORDER BY item",
         ).all(id);
-        return this.page(
-          rows.map((r) => {
-            const x = find(C.animals, r.item);
-            return `${x.id} ${x.name} [${x.rarity}] ×${fmt(r.qty)}`;
-          }),
-          a[0],
-        );
+        const groups = C.rarities.map((rarity) => ({ rarity, rows: [] }));
+        for (const r of rows) {
+          const animal = find(C.animals, r.item);
+          groups[animal.tier].rows.push(`${animal.id} • ${animal.name} ×${fmt(r.qty)}`);
+        }
+        const lines = [];
+        for (let i = groups.length - 1; i >= 0; i--) {
+          if (!groups[i].rows.length) continue;
+          lines.push(`**✦ ${groups[i].rarity.toUpperCase()}**`, ...groups[i].rows, "");
+        }
+        return `**NEOX • MONSTER COLLECTION**\n${this.page(lines, a[0], 16)}`;
       }
       case "animals": {
         if (a[0]?.startsWith("a")) {
@@ -563,39 +586,84 @@ class Game {
           a[0],
         );
       }
+      case "sacrifice": {
+        assert(a[0], "Usage: sacrifice monster-id|all [quantity]");
+        const rarity = C.rarities.find((x) => x.toLowerCase() === a[0]);
+        const bulk = a[0] === "all" || !!rarity;
+        assert(!bulk || !a[1], "Bulk selection does not accept a quantity.");
+        const rows = bulk
+          ? this.sql("SELECT item,qty FROM inventory WHERE user=? AND kind='animal'").all(id).filter((r) => !rarity || find(C.animals, r.item).rarity === rarity)
+          : [{ item: find(C.animals, a[0]).id, qty: this.qty(id, "animal", a[0]) }];
+        let total = 0, sacrificed = 0;
+        for (const row of rows) {
+          const animal = find(C.animals, row.item);
+          const qty = bulk ? Math.max(0, row.qty - 1) : a[1] ? n(a[1], 1, 1000000) : 1;
+          if (!qty) continue;
+          assert(qty <= row.qty, "Not enough monsters.");
+          const essence = [1, 2, 4, 8, 16, 32, 64, 128][animal.tier] * qty;
+          assert(Number.isSafeInteger(total + essence), "Essence amount too large.");
+          total += essence;
+          sacrificed += qty;
+          this.item(id, "animal", animal.id, -qty);
+        }
+        assert(sacrificed > 0, "No monsters available to sacrifice.");
+        this.item(id, "essence", "rift", total);
+        return `**RIFT ALTAR • SACRIFICE COMPLETE**\nSacrificed: **${fmt(sacrificed)} monsters**\nGained: **${fmt(total)} Rift Essence**\n\nUse \`${this.getPrefix(ctx.guildId)} infuse armor-id amount\` to permanently strengthen armor.\nSacrifice all preserves one of each species.`;
+      }
+      case "repair": {
+        const rows = a[0] === "all"
+          ? this.sql("SELECT * FROM gear WHERE user=?").all(id)
+          : [this.gear(id, a[0])];
+        let cost = 0, repaired = 0;
+        for (const g of rows) {
+          assert(!this.locked(g.id), "Cancel active gear trades before repairing.");
+          const condition = this.sql("SELECT condition FROM gear_condition WHERE gear=?").get(g.id)?.condition ?? 100;
+          if (condition === 100) continue;
+          const base = C.equipment.find((e) => e.id === g.item);
+          cost += Math.max(1, Math.ceil((100 - condition) * (base.tier + 1) / 2));
+          repaired++;
+        }
+        assert(repaired, "Equipment is already at full condition.");
+        this.money(id, -cost, "equipment repairs");
+        for (const g of rows) this.sql("INSERT INTO gear_condition(gear,condition) VALUES(?,100) ON CONFLICT(gear) DO UPDATE SET condition=100").run(g.id);
+        return `**NEOX • EQUIPMENT REPAIRED**\nItems repaired: **${repaired}**\nCost: **${fmt(cost)} Dark Coins**\nCondition restored to **100%**.`;
+      }
+      case "infuse": {
+        const g = this.gear(id, a[0]);
+        assert(g.base.slot === "armor", "Only armor can be infused.");
+        assert(!this.locked(g.id), "Cancel the trade offer first.");
+        const current = this.sql("SELECT defense FROM armor_infusions WHERE gear=?").get(g.id)?.defense || 0;
+        assert(current < 200, "This armor has reached its +200 infusion limit.");
+        const amount = a[1] ? n(a[1], 1, 200) : 1;
+        assert(current + amount <= 200, `Only ${200 - current} infusion points remain.`);
+        this.item(id, "essence", "rift", -amount);
+        this.sql("INSERT INTO armor_infusions(gear,defense) VALUES(?,?) ON CONFLICT(gear) DO UPDATE SET defense=defense+excluded.defense").run(g.id, amount);
+        return `**ARMOR INFUSION SUCCESS**\n#${g.id} • ${g.base.name} [${g.base.rarity}]\nBase defense: **${g.base.defense}**\nInfusion: **+${current + amount}/200 DEF**\nTotal armor defense: **${g.base.defense + (g.level - 1) + g.enhance * 2 + current + amount}**\nRift Essence used: **${amount}**\n\nA higher-rarity armor starts with stronger base stats and can also be infused.`;
+      }
       case "sellanimals": {
         assert(a[0], "Usage: sellmonsters monster-id|all [quantity]");
-        assert(
-          a[0] !== "all" || !a[1],
-          "Use sellmonsters all without a quantity.",
-        );
-        let count = 0;
-        const rows =
-          a[0] === "all"
-            ? this.sql(
-                "SELECT item,qty FROM inventory WHERE user=? AND kind='animal'",
-              ).all(id)
-            : [
-                {
-                  item: find(C.animals, a[0]).id,
-                  qty: this.qty(id, "animal", a[0]),
-                },
-              ];
+        
+        const rarity = C.rarities.find((x) => x.toLowerCase() === a[0]);
+        const bulk = a[0] === "all" || !!rarity;
+        assert(!bulk || !a[1], "Bulk selection does not accept a quantity.");
+        const rows = bulk
+          ? this.sql("SELECT item,qty FROM inventory WHERE user=? AND kind='animal'").all(id).filter((r) => !rarity || find(C.animals, r.item).rarity === rarity)
+          : [{ item: find(C.animals, a[0]).id, qty: this.qty(id, "animal", a[0]) }];
+        let count = 0, earned = 0;
         for (const row of rows) {
-          const quantity =
-            a[0] === "all"
-              ? Math.max(0, row.qty - 1)
-              : a[1]
-                ? n(a[1], 1, 1000000)
-                : 1;
+          const quantity = bulk ? Math.max(0, row.qty - 1) : a[1] ? n(a[1], 1, 1000000) : 1;
           if (!quantity) continue;
-          const x = find(C.animals, row.item);
-          this.item(id, "animal", x.id, -quantity);
+          const animal = find(C.animals, row.item);
+          assert(quantity <= row.qty, "Not enough monsters.");
+          const coins = Math.floor(animal.value / 4) * quantity;
+          assert(Number.isSafeInteger(earned + coins), "Sale amount too large.");
+          this.item(id, "animal", animal.id, -quantity);
+          earned += coins;
           count += quantity;
         }
-        assert(count > 0, "No monsters to sell (all keeps one of each).");
-        // Releasing duplicates does not mint new Dark Coins.
-        return `Released ${fmt(count)} duplicate monsters. No Dark Coins created.`;
+        assert(count > 0, "No monsters available to sell.");
+        this.money(id, earned, "monster sales");
+        return `**NEOX • MONSTERS SOLD**\nSold: **${fmt(count)} monsters**\nEarned: **${fmt(earned)} Dark Coins**\n\nSelling all keeps one of each species. Sacrifice duplicates instead to earn Rift Essence.`;
       }
       case "huntstats":
         return `Level ${level(p)} • ${fmt(p.xp)} hunting XP\n${fmt(p.hunts)} hunts • streak ${p.streak}/50\n${this.sql("SELECT COUNT(*) AS n FROM discoveries WHERE user=?").get(id).n}/200 species discovered\nNext level: ${fmt(level(p) ** 2 * 100)} XP`;
@@ -622,23 +690,35 @@ class Game {
         return `${count}/200 species discovered forever (selling does not erase discoveries).\nMilestones: 10, 25, 50, 100, 150, 200; each grants a box.\n${milestones ? `Claimed milestone boxes.` : "Use collection claim to collect unlocked rewards."}`;
       }
       case "inventory": {
-        const rows = this.sql(
+        const entries = this.sql(
           "SELECT kind,item,qty FROM inventory WHERE user=? ORDER BY kind,item",
-        )
-          .all(id)
-          .map(
-            (r) =>
-              `${inventoryLabel(r.kind, r.item)} ×${fmt(r.qty)}`,
-          );
-        rows.push(
-          ...this.sql("SELECT * FROM gear WHERE user=? ORDER BY id")
-            .all(id)
-            .map(
-              (g) =>
-                `${itemIcon(C.equipment.find((x) => x.id === g.item) || {})} #${g.id} ${C.equipment.find((x) => x.id === g.item)?.name || g.item} L${g.level} +${g.enhance}${g.slot ? " ✅ Equipped" : ""}`,
-            ),
-        );
-        return `🎒 **Your inventory**\n${this.page(rows, a[0])}`;
+        ).all(id);
+        const gear = this.sql("SELECT * FROM gear WHERE user=? ORDER BY id").all(id);
+        const groups = C.rarities.map((rarity) => ({ rarity, rows: [] }));
+        const supplies = [];
+        for (const r of entries) {
+          if (r.kind === "animal") {
+            const animal = C.animals.find((x) => x.id === r.item);
+            if (animal) groups[animal.tier].rows.push(`${animal.id} • ${animal.name} ×${fmt(r.qty)}`);
+          } else {
+            supplies.push(`${r.kind === "essence" ? "Rift Essence" : inventoryLabel(r.kind, r.item)} ×${fmt(r.qty)}`);
+          }
+        }
+        for (const g of gear) {
+          const item = C.equipment.find((x) => x.id === g.item);
+          const row = `${itemIcon(item || {})} #${g.id} ${item?.name || g.item} • Lv.${g.level} +${g.enhance}${g.slot ? " • EQUIPPED" : ""}`;
+          if (item && groups[item.tier]) groups[item.tier].rows.push(row);
+          else supplies.push(row);
+        }
+        const lines = [];
+        for (let i = groups.length - 1; i >= 0; i--) {
+          if (!groups[i].rows.length) continue;
+          lines.push(`**✦ ${groups[i].rarity.toUpperCase()}**`);
+          lines.push(...groups[i].rows);
+          lines.push("");
+        }
+        if (supplies.length) lines.push("**SUPPLIES • GEMS • BOXES**", ...supplies);
+        return `**NEOX • INVENTORY**\n${this.page(lines, a[0], 16)}`;
       }
       case "gems":
         return `${
@@ -646,7 +726,7 @@ class Game {
             "SELECT item,qty FROM inventory WHERE user=? AND kind='gem' ORDER BY item",
           )
             .all(id)
-            .map((g) => `${g.item} ×${g.qty}`)
+            .map((g) => `${g.item} ×${g.qty}${/-(50|100|500|1000)$/.test(g.item) ? ` • ${g.item.split("-").pop()} uses` : ""}`)
             .join("\n") || "No gems."
         }\nActive:\n${
           this.active(id)
@@ -657,16 +737,18 @@ class Game {
             .join("\n") || "None"
         }\nOne per category; expiry and remaining hunts both apply. Hunting gems add 1/2/3 draws by tier. Event gems improve rare tier weights; all weights are normalized.`;
       case "activate": {
-        const g = find(C.gems, a[0]);
+        const gemId = a[0];
+        const g = find(C.gems, gemId.replace(/-(50|100|500|1000)$/, ""));
+        const durability = Number(gemId.match(/-(50|100|500|1000)$/)?.[1] || g.uses);
         assert(
           !this.active(id).some((e) => e.kind === g.kind),
           "That gem category is already active.",
         );
-        this.item(id, "gem", g.id, -1);
+        this.item(id, "gem", gemId, -1);
         this.sql(
           "INSERT INTO effects(user,kind,item,expires,uses) VALUES(?,?,?,?,?) ON CONFLICT(user,kind) DO UPDATE SET item=excluded.item,expires=excluded.expires,uses=excluded.uses",
-        ).run(id, g.kind, g.id, this.clock() + g.duration, g.uses);
-        return `Activated ${g.name}: ${g.uses} hunts or ${g.duration / 3600000} hours, whichever ends first.`;
+        ).run(id, g.kind, gemId, this.clock() + (gemId.includes("-") ? 30 * 86400000 : g.duration), durability);
+        return `Activated ${g.name}: ${durability} hunts or ${gemId.includes("-") ? "30 days" : `${g.duration / 3600000} hours`}, whichever ends first.`;
       }
       case "craft":
       case "upgrade": {
@@ -706,7 +788,7 @@ class Game {
       }
       case "equipment": {
         const s = this.stats(id);
-        return `Attack ${s.attack} • Defense ${s.defense}\n${s.rows.map((g) => `#${g.id} ${g.item} L${g.level} +${g.enhance} [${g.slot}]`).join("\n") || "No equipment."}\nAbilities: ${s.abilities.join(", ") || "none"}\nUpgrades: xp1 + 250 × tier × current level Dark Coins. Enhancement: lucky1 × next enhancement + 500 × next enhancement Dark Coins. Craft: currency1 × max(1, rarity index) + 70% shop price.`;
+        return `Attack ${s.attack} • Defense ${s.defense}\n${s.rows.map((g) => `#${g.id} ${g.item} L${g.level} +${g.enhance} [${g.slot}]${g.slot === "armor" ? ` • Infused +${this.sql("SELECT defense FROM armor_infusions WHERE gear=?").get(g.id)?.defense || 0}/200 DEF` : ""}`).join("\n") || "No equipment."}\nAbilities: ${s.abilities.join(", ") || "none"}\nUpgrades: xp1 + 250 × tier × current level Dark Coins. Enhancement: lucky1 × next enhancement + 500 × next enhancement Dark Coins. Craft: currency1 × max(1, rarity index) + 70% shop price.`;
       }
       case "equip": {
         const g = this.gear(id, a[0]);
@@ -735,7 +817,7 @@ class Game {
         return rows
           .map(
             (g) =>
-              `#${g.id} ${g.base.name} [${g.base.rarity}] L${g.level} +${g.enhance}\nATK ${g.base.attack + 2 * (g.level - 1) + g.enhance * 3} • DEF ${g.base.defense + g.level - 1 + g.enhance * 2} • ${g.base.ability}`,
+              `#${g.id} ${g.base.name} [${g.base.rarity}] L${g.level} +${g.enhance}\nATK ${g.base.attack + 2 * (g.level - 1) + g.enhance * 3} • DEF ${g.base.defense + g.level - 1 + g.enhance * 2 + (g.base.slot === "armor" ? (this.sql("SELECT defense FROM armor_infusions WHERE gear=?").get(g.id)?.defense || 0) : 0)} • ${g.base.ability}`,
           )
           .join("\nversus\n");
       }
@@ -774,6 +856,8 @@ class Game {
         return `🛍️ Bought ${quantity} ${item.name || item.id} for **${fmt(item.price * quantity)} Dark Coins**.\n🎒 Added to your inventory.`;
       }
       case "sell": {
+        if (!/^\d+$/.test(a[0])) return this.run("sellanimals", a, p, ctx);
+        assert(a.length === 1, "Equipment disposal accepts one gear ID.");
         const g = this.gear(id, a[0]);
         assert(!g.slot, "Unequip the item first.");
         assert(!this.locked(g.id), "Cancel the trade offer first.");
@@ -826,6 +910,7 @@ class Game {
               ];
         let opened = 0;
         const rewards = new Map();
+        const rareFinds = [];
         const add = (s) => rewards.set(s, (rewards.get(s) || 0) + 1);
         for (const row of rows) {
           if (opened >= 50) break;
@@ -856,8 +941,10 @@ class Game {
                         [3, 5],
                       ]);
                 const g = this.rng.pick(C.gems.filter((g) => g.tier === tier));
-                this.item(id, "gem", g.id, 1);
-                add(g.id);
+                const durability = this.rng.weighted([[50, 60], [100, 28], [500, 10], [1000, 2]]);
+                const variant = `${g.id}-${durability}`;
+                this.item(id, "gem", variant, 1);
+                add(`${g.name} • ${durability} uses`);
               } else {
                 const tier = this.rng.weighted(
                   b.tierWeights
@@ -870,6 +957,7 @@ class Game {
                   );
                   this.animal(id, animal, 1);
                   add(`${animal.id} ${animal.name}`);
+                  if (animal.tier >= 4) rareFinds.push({ name: animal.name, rarity: animal.rarity, type: "companion", id: animal.id, tier: animal.tier });
                 } else {
                   const e = this.rng.pick(
                     C.equipment.filter(
@@ -884,6 +972,7 @@ class Game {
                   );
                   const gid = this.giveGear(id, e.id);
                   add(`#${gid} ${e.id}`);
+                  if (e.tier >= 4) rareFinds.push({ name: e.name, rarity: e.rarity, type: e.type, id: e.id, gearId: String(gid), attack: e.attack, defense: e.defense, ability: e.ability, tier: e.tier });
                 }
               }
             }
@@ -892,7 +981,10 @@ class Game {
         }
         assert(opened > 0, "No boxes to open.");
         // Loot boxes grant items only; currency creation is restricted.
-        return `Opened ${opened} boxes • monster and item rewards\n${[...rewards].map(([s, q]) => `${s} ×${q}`).join("\n")}`;
+        return {
+          content: `Opened ${opened} boxes • monster and item rewards\n${[...rewards].map(([s, q]) => `${s} ×${q}`).join("\n")}`,
+          presentation: { kind: "loot", opened, rareFinds: rareFinds.slice(0, 5) },
+        };
       }
       case "pet": {
         if (a[0]) {
@@ -933,16 +1025,21 @@ class Game {
           : null;
         assert(!enemyId || enemy, "That player must play Neox first.");
         if (enemyId) this.cooldown(id, `rival:${enemyId}`, 3600000);
+        const stage = !boss && !enemy ? (this.sql("SELECT stage FROM battle_stages WHERE user=?").get(id)?.stage || 1) : null;
+        const stageBoss = stage !== null && stage % 10 === 0;
+        const elite = stage !== null && stage % 50 === 0;
+        const scale = stage === null ? 0 : stage - 1;
         const me = this.stats(id),
           foe = enemy
             ? this.stats(enemyId)
             : {
-                attack: (boss ? 22 : 12) + level(p) * (boss ? 4 : 3),
-                defense: (boss ? 10 : 5) + level(p) * (boss ? 3 : 2),
-                abilities: boss ? ["force", "guard"] : ["force"],
+                attack: (boss ? 22 : 12) + level(p) * (boss ? 4 : 3) + Math.floor(scale * 1.5) + (stageBoss ? 10 : 0) + (elite ? 15 : 0),
+                defense: (boss ? 10 : 5) + level(p) * (boss ? 3 : 2) + Math.floor(scale * 1.1) + (stageBoss ? 7 : 0) + (elite ? 10 : 0),
+                abilities: boss || stageBoss ? ["force", "guard"] : ["force"],
               };
         let hp = 100,
-          ehp = boss ? 160 : 100;
+          ehp = boss ? 160 : stage !== null ? 100 + Math.floor(scale * 8) + (stageBoss ? 80 : 0) + (elite ? 120 : 0) : 100;
+        const enemyMaxHP = ehp;
         const log = [];
         const strike = (att, def) => {
           let damage = Math.max(
@@ -967,7 +1064,19 @@ class Game {
         }
         const won = hp > 0 && (ehp <= 0 || hp > ehp),
           draw = hp > 0 && hp === ehp;
+        let battleLoot = "";
+        if (won && !draw && !enemy && this.rng.int(1, 100) <= (boss || stageBoss ? 35 : 12)) {
+          this.item(id, "box", "weapon", 1);
+          battleLoot = `\nLoot: +1 Weapon Cache (open with ${this.getPrefix(ctx.guildId)} open weapon)`;
+        }
+        for (const gear of me.rows) {
+          const condition = this.sql("SELECT condition FROM gear_condition WHERE gear=?").get(gear.id)?.condition ?? 100;
+          const loss = this.rng.int(1, 4);
+          this.sql("INSERT INTO gear_condition(gear,condition) VALUES(?,?) ON CONFLICT(gear) DO UPDATE SET condition=excluded.condition").run(gear.id, Math.max(0, condition - loss));
+        }
         const reward = 0;
+        if (stage !== null && won && !draw && stage < 1000000000)
+          this.sql("INSERT INTO battle_stages(user,stage) VALUES(?,?) ON CONFLICT(user) DO UPDATE SET stage=excluded.stage").run(id, stage + 1);
         // Battles grant progression only; no new Dark Coins.
         this.sql(
           "UPDATE players SET battles_total=battles_total+1 WHERE id=?",
@@ -994,11 +1103,12 @@ class Game {
           );
         }
         return {
-          content: `${enemy ? `Ranked spar against <@${enemyId}>` : boss ? "Boss battle against the Sovereign of the Rift" : "Expedition against a Rift Sentinel"}\n${log.join("\n")}\n${draw ? "Draw" : won ? "Victory" : "Defeat"} • +0 Dark Coins • ${won ? 35 : 15} hunting XP\nRanked sparring uses saved equipment; no opponent coins are taken.`,
+          content: `${enemy ? `Ranked spar against <@${enemyId}>` : boss ? "Boss battle against the Sovereign of the Rift" : `Expedition Stage ${stage} against ${elite ? "the Eternal Rift Sovereign" : stageBoss ? "a Rift Overlord" : "a Rift Sentinel"}`}\n${log.join("\n")}\n${draw ? "Draw" : won ? "Victory" : "Defeat"} • +0 Dark Coins • ${won ? 35 : 15} hunting XP\nRanked sparring uses saved equipment; no opponent coins are taken.\nEquipped gear loses 1–4% condition per fight. Repair with ${this.getPrefix(ctx.guildId)} repair all.${battleLoot}`,
           presentation: {
             kind: "card", command: name,
             combat: { won, draw, hp: Math.max(0, hp), enemyHP: Math.max(0, ehp),
-              enemy: enemy ? `<@${enemyId}>` : boss ? "Sovereign of the Rift" : "Rift Sentinel",
+              enemy: enemy ? `<@${enemyId}>` : boss ? "Sovereign of the Rift" : elite ? "Eternal Rift Sovereign" : stageBoss ? "Rift Overlord" : "Rift Sentinel",
+              stage, stageBoss, elite, enemyMaxHP, nextStage: stage === null ? null : stage + (won && !draw && stage < 1000000000 ? 1 : 0),
               log, xp: won ? 35 : 15 },
           },
         };
@@ -1142,7 +1252,10 @@ class Game {
               : 0;
           return { reels, multiplier };
         });
-        return `${settled.reels.map((r) => ["🌑", "🔮", "🦇", "💎", "⚔️", "👑"][r]).join(" ")}\nReturned ${fmt(settled.payout)} Dark Coins; net ${fmt(settled.payout - wager)}. 216 equiprobable outcomes: triple 6/216 pays 10×; pair 90/216 returns 1×; other 120/216 pays 0. RTP 69.44%. Winnings paid directly by Neox.`;
+        return {
+          content: `${settled.reels.map((r) => ["🌑", "🔮", "🦇", "💎", "⚔️", "👑"][r]).join(" ")}\nReturned ${fmt(settled.payout)} Dark Coins; net ${fmt(settled.payout - wager)}. 216 equiprobable outcomes: triple 6/216 pays 10×; pair 90/216 returns 1×; other 120/216 pays 0. RTP 69.44%. Winnings paid directly by Neox.`,
+          presentation: { kind: "slots", wager, reels: settled.reels, payout: settled.payout, multiplier: settled.multiplier },
+        };
       }
       case "prefix": {
         assert(ctx.guildId, "Use this in a server.");
