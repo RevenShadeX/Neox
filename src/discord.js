@@ -12,7 +12,9 @@ const { serverPermissions } = require("./permissions");
 const { commands, registry } = require("./commands");
 const { parsePrefix, parseArguments } = require("./parser");
 const { presentCoinflip, levelUpPayload } = require("./presentation");
+const { presentSlots } = require("./slots-presentation");
 const { EmojiResolver } = require("./emojis");
+const { decoratePayload } = require("./emoji-decorate");
 const { ProfileService } = require("./profile-service");
 const { RoleRecovery } = require("./role-shop");
 const { roleAPI } = require("./discord-roles");
@@ -180,6 +182,14 @@ function createClient(
       }
   }
   async function deliver(output, source, transport) {
+    const original = transport;
+    transport = {
+      ...original,
+      show: (p) => original.show(decoratePayload(p, emojis)),
+      extra: (p) => original.extra(decoratePayload(p, emojis)),
+      fallback: (p) => original.fallback(decoratePayload(p, emojis)),
+      finish: (sent, p) => original.finish(sent, decoratePayload(p, emojis)),
+    };
     const p = output.presentation;
     if (p?.kind === "modal") {
       await source.showModal(UI.modal(p));
@@ -201,7 +211,9 @@ function createClient(
       await transport.show(UI.queue(p));
       return;
     }
-    if (p?.kind === "coinflip")
+    if (p?.kind === "slots")
+      await presentSlots(output, transport, emojis, animation);
+    else if (p?.kind === "coinflip")
       await presentCoinflip(output, transport, {
         ...animation,
         emojis: emojiContext(source),
