@@ -13,6 +13,7 @@ const {
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
+  StringSelectMenuBuilder,
 } = require("discord.js");
 const { GameError } = require("./game");
 const { commands, registry } = require("./commands");
@@ -131,6 +132,24 @@ function createClient(
       new ButtonBuilder().setCustomId(`neox:cf:${owner}:t`).setLabel("Tails").setStyle(ButtonStyle.Danger)
     )], allowedMentions,
   });
+  const shopPanel = (owner, category = "gems") => {
+    const C = require("./content");
+    const items = category === "boxes" ? C.boxes : category === "equipment" ? C.equipment : C.gems;
+    const shown = items.slice(0,25);
+    return {
+      embeds: [new EmbedBuilder().setColor(0xB91C32).setTitle("NEOX | Global Shop")
+        .setDescription(`**${category.toUpperCase()}**\\n${shown.map(x => `• ${x.name || x.id}: **${x.price.toLocaleString()}** Dark Coins`).join("\\n")}\\n\\nChoose an item to purchase.`)],
+      components: [
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`neox:shop:${owner}:gems`).setLabel("Gems").setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`neox:shop:${owner}:boxes`).setLabel("Boxes").setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId(`neox:shop:${owner}:equipment`).setLabel("Equipment").setStyle(ButtonStyle.Secondary)),
+        new ActionRowBuilder().addComponents(new StringSelectMenuBuilder()
+          .setCustomId(`neox:shopitem:${owner}`).setPlaceholder("Select an item to purchase")
+          .addOptions(shown.map(x => ({label:(x.name || x.id).slice(0,90), value:x.id, description:`${x.price.toLocaleString()} Dark Coins`}))))
+      ], allowedMentions,
+    };
+  };
   const needsAgreement = (content) => typeof content === "string" && content.includes("Accept Neox rules first:");
   client.on(Events.MessageCreate, async (message) => {
     if (
@@ -144,6 +163,10 @@ function createClient(
       game.getPrefix(message.guildId),
     );
     if (!parsed) return;
+    if (registry.resolve(parsed.command) === "shop" && parsed.args.length === 0) {
+      await message.channel.send(shopPanel(message.author.id));
+      return;
+    }
     if (registry.resolve(parsed.command) === "cf" && parsed.args.length === 0) {
       await message.channel.send(coinflipPanel(message.author.id));
       return;
@@ -211,6 +234,34 @@ function createClient(
     }
   });
   client.on(Events.InteractionCreate, async (interaction) => {
+    if (interaction.isButton() && interaction.customId.startsWith("neox:shop:")) {
+      const [, , owner, category] = interaction.customId.split(":");
+      if (interaction.user.id !== owner) return interaction.reply({content:"This shop menu belongs to another player.",flags:64});
+      await interaction.update(shopPanel(owner,category));
+      return;
+    }
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith("neox:shopitem:")) {
+      const owner = interaction.customId.split(":")[2];
+      if (interaction.user.id !== owner) return interaction.reply({content:"This shop menu belongs to another player.",flags:64});
+      const item = interaction.values[0];
+      const modal = new ModalBuilder().setCustomId(`neox:shopbuy:${item}`).setTitle("Neox | Purchase Item");
+      modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("quantity")
+        .setLabel("Quantity (1–50)").setStyle(TextInputStyle.Short).setRequired(true).setValue("1").setMaxLength(2)));
+      await interaction.showModal(modal);
+      return;
+    }
+    if (interaction.isModalSubmit() && interaction.customId.startsWith("neox:shopbuy:")) {
+      await interaction.deferReply({flags:64});
+      try {
+        const item = interaction.customId.split(":")[2];
+        const quantity = interaction.fields.getTextInputValue("quantity").trim();
+        const output = game.executeResult("buy",[item,quantity],{userId:interaction.user.id,guildId:interaction.guildId,requestId:interaction.id});
+        await interaction.editReply({content:output.content,allowedMentions});
+      } catch(err) {
+        await interaction.editReply({content:errorText(err),allowedMentions});
+      }
+      return;
+    }
     if (interaction.isButton() && interaction.customId.startsWith("neox:cf:")) {
       const [, , owner, side] = interaction.customId.split(":");
       if (interaction.user.id !== owner) {
