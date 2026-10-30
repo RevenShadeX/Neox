@@ -63,12 +63,12 @@ const commands = {
     usage: "[page|monster-id]",
     description: "Monster catalogue and probabilities",
   },
-  sacrifice: { usage: "monster-id|all [quantity]", description: "Sacrifice duplicate monsters for Rift Essence" },
+  sacrifice: { aliases: ["sc", "nsc"], usage: "monster-id|all|rarity [quantity]", description: "Sacrifice duplicate monsters for Rift Essence" },
   infuse: { usage: "armor-gear-id [essence]", description: "Use Rift Essence to increase armor defense (max +200)" },
   sellanimals: {
-    aliases: ["release", "sellmonsters"],
-    usage: "monster-id|all [quantity]",
-    description: "Release duplicate monsters; no Dark Coin reward",
+    aliases: ["release", "sellmonsters", "sell", "s"],
+    usage: "monster-id|all|rarity [quantity]",
+    description: "Sell monsters for Dark Coins; all or rarity preserves one of each",
   },
   huntstats: { description: "Hunting progression" },
   collection: {
