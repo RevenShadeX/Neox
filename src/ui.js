@@ -14,6 +14,7 @@ const { items, PAGE } = require("./sessions");
 const { markdownName } = require("./text");
 const C = require("./content");
 const { itemIcon } = require("./item-display");
+const { durationText, optionEmoji } = require("./role-options");
 const RED = 0xb91c32,
   allowedMentions = { parse: [], repliedUser: false };
 const row = (...components) =>
@@ -24,7 +25,7 @@ const button = (id, label, style = ButtonStyle.Secondary, disabled = false) => {
     Cancel: "✖️", Previous: "◀️", Next: "▶️", Gems: "💎",
     Equipment: "⚔️", "Loot boxes": "📦", Consumables: "🍖",
     "Confirm Purchase": "🛍️", "Enter Quantity": "🔢", "Change Quantity": "🔢",
-    "Edit Price": "✏️", "Remove Listing": "🗑️",
+    "Edit Price": "✏️", "Edit Listing": "✏️", "Remove Listing": "🗑️",
   };
   const control = new ButtonBuilder()
     .setCustomId(id)
@@ -164,13 +165,13 @@ function panel(game, s) {
       page = Math.min(v.page, pages - 1),
       list = game
         .sql(
-          "SELECT * FROM role_listings WHERE guild=? ORDER BY role LIMIT ? OFFSET ?",
+          "SELECT l.*,COALESCE(o.duration_ms,0) AS duration_ms,COALESCE(o.emoji,'') AS emoji FROM role_listings l LEFT JOIN role_listing_options o ON o.guild=l.guild AND o.role=l.role WHERE l.guild=? ORDER BY l.role LIMIT ? OFFSET ?",
         )
         .all(s.guild, PAGE, page * PAGE);
     if (v.stage === "pick") {
       card = embed(
         "Choose a Role",
-        "Choose a server role, then set its price. Neox must be able to assign the role.",
+        "Choose a server role, then set its price, optional duration and emoji. Neox must be able to assign the role.",
       );
       components = [
         row(
@@ -183,13 +184,13 @@ function panel(game, s) {
     } else if (v.stage === "detail" && v.role) {
       card = embed(
         admin ? "Manage Role Listing" : "Confirm Role Purchase",
-        `🏷️ **${markdownName(v.name || "Role")}**\nPrice: **${v.price.toLocaleString("en-US")} Dark Coins**\n\n${admin ? "Edit the price or remove this server’s listing." : "Payment is held in escrow until role delivery or a safe refund. Role purchases consume existing coins."}`,
+        `${v.emoji || "🏷️"} **${markdownName(v.name || "Role")}**\nPrice: **${v.price.toLocaleString("en-US")} Dark Coins**\n⏳ Duration: **${durationText(v.durationMs)}**${v.durationMs ? " • Removed automatically after expiry" : ""}\n\n${admin ? "Edit price, duration and emoji, or remove this server’s listing." : "Payment is held in escrow until role delivery or a safe refund. Role purchases consume existing coins."}`,
       );
       components = [
         row(
           ...(admin
             ? [
-                button(id("editrole"), "Edit Price", ButtonStyle.Danger),
+                button(id("editrole"), "Edit Listing", ButtonStyle.Danger),
                 button(id("removerole"), "Remove Listing"),
               ]
             : [
@@ -205,7 +206,7 @@ function panel(game, s) {
     } else {
       card = embed(
         admin ? "Server Role Shop Management" : "Server Role Shop",
-        `Shop: **${enabled ? "Enabled" : "Disabled"}** • Page ${page + 1}/${pages}\n\n${list.map((l) => `🏷️ ${markdownName(l.name)} • ${l.price.toLocaleString("en-US")} Dark Coins`).join("\n") || "No listings configured."}\n\n${admin ? "Management requires Manage Server and Manage Roles on every action." : "Only listings from this server can be purchased."}`,
+        `Shop: **${enabled ? "Enabled" : "Disabled"}** • Page ${page + 1}/${pages}\n\n${list.map((l) => `${l.emoji || "🏷️"} ${markdownName(l.name)} • ${l.price.toLocaleString("en-US")} Dark Coins • ${durationText(l.duration_ms)}`).join("\n") || "No listings configured."}\n\n${admin ? "Management requires Manage Server and Manage Roles on every action." : "Only listings from this server can be purchased."}`,
       );
       if (admin)
         components.push(
@@ -228,9 +229,9 @@ function panel(game, s) {
               .addOptions(
                 list.map((l) => ({
                   label: l.name.slice(0, 100),
-                  emoji: "🏷️",
+                  emoji: optionEmoji(l.emoji),
                   value: l.role,
-                  description: `${l.price.toLocaleString("en-US")} Dark Coins`,
+                  description: `${l.price.toLocaleString("en-US")} Dark Coins • ${durationText(l.duration_ms)}`,
                 })),
               ),
           ),
@@ -252,21 +253,18 @@ function panel(game, s) {
   return { embeds: [card], components, allowedMentions };
 }
 function modal(p) {
-  return new ModalBuilder()
-    .setCustomId(cid(p.session, p.action))
-    .setTitle(p.title)
-    .addComponents(
-      row(
-        new TextInputBuilder()
-          .setCustomId(p.field)
-          .setLabel(p.label)
-          .setStyle(TextInputStyle.Short)
-          .setRequired(true)
-          .setMaxLength(p.field === "quantity" ? 2 : 20)
-          .setValue(p.value || ""),
-      ),
-    );
+  const fields = [{ id: p.field, label: p.label, required: true, value: p.value || "" }, ...(p.extraFields || [])];
+  return new ModalBuilder().setCustomId(cid(p.session, p.action)).setTitle(p.title)
+    .addComponents(...fields.map((field) => {
+      const input = new TextInputBuilder().setCustomId(field.id).setLabel(field.label)
+        .setStyle(TextInputStyle.Short).setRequired(!!field.required)
+        .setMaxLength(field.id === "quantity" ? 2 : field.id === "emoji" ? 100 : 20);
+      if (field.value) input.setValue(field.value);
+      if (field.placeholder) input.setPlaceholder(field.placeholder);
+      return row(input);
+    }));
 }
+
 function duel(p) {
   return {
     embeds: [

@@ -2,6 +2,7 @@
 const { randomBytes } = require("node:crypto");
 const { MAX } = require("./limits");
 const { assert } = require("./errors");
+const { parseDuration, parseEmoji } = require("./role-options");
 const token = () => randomBytes(12).toString("hex");
 const ACTIVE = "'pending','assigning','uncertain'";
 function checkRole(ctx, role, { purchase = false } = {}) {
@@ -32,7 +33,7 @@ class RoleShop {
         .get(guild)?.enabled === 1
     );
   }
-  configure(ctx, action, role, price) {
+  configure(ctx, action, role, price, options = {}) {
     const g = this.game;
     assert(
       ctx.guildId && ctx.manageGuild && ctx.manageRoles,
@@ -64,6 +65,9 @@ class RoleShop {
       Number.isSafeInteger(price) && price > 0 && price <= MAX,
       "Invalid role price.",
     );
+    const previous = g.sql("SELECT * FROM role_listing_options WHERE guild=? AND role=?").get(ctx.guildId, role);
+    const duration = options.duration === undefined ? previous?.duration_ms || 0 : parseDuration(options.duration);
+    const emoji = options.emoji === undefined ? previous?.emoji || "" : parseEmoji(options.emoji, ctx.availableEmojis);
     const existing = g
       .sql("SELECT 1 FROM role_listings WHERE guild=? AND role=?")
       .get(ctx.guildId, role);
@@ -82,8 +86,10 @@ class RoleShop {
       String(ctx.roleFacts.name || "Role").slice(0, 100),
       price,
     );
+    g.sql("INSERT INTO role_listing_options(guild,role,duration_ms,emoji) VALUES(?,?,?,?) ON CONFLICT(guild,role) DO UPDATE SET duration_ms=excluded.duration_ms,emoji=excluded.emoji")
+      .run(ctx.guildId, role, duration, emoji);
   }
-  reserve(ctx, role, price) {
+  reserve(ctx, role, price, expectedVersion) {
     const g = this.game;
     g.requireAgreement(ctx.userId);
     assert(this.enabled(ctx.guildId), "This server's role shop is disabled.");
@@ -92,7 +98,7 @@ class RoleShop {
       .sql("SELECT * FROM role_listings WHERE guild=? AND role=?")
       .get(ctx.guildId, role);
     assert(
-      listing && listing.price === price,
+      listing && listing.price === price && (expectedVersion === undefined || listing.version === expectedVersion),
       "This listing changed. Open the role shop again.",
     );
     assert(
@@ -103,6 +109,8 @@ class RoleShop {
         .get(ctx.guildId, ctx.userId, role),
       "A purchase for this role is already being recovered.",
     );
+    assert(!g.sql("SELECT 1 FROM role_expirations WHERE guild=? AND buyer=? AND role=?").get(ctx.guildId, ctx.userId, role),
+      "A timed grant for this role is still active or awaiting expiry removal. Try again after removal.");
     const held = g
       .sql(
         `SELECT COALESCE(SUM(price),0) AS amount,COUNT(*) AS n FROM role_purchases WHERE buyer=? AND status IN(${ACTIVE})`,
@@ -121,6 +129,9 @@ class RoleShop {
     g.sql(
       "INSERT INTO role_purchases(id,request,guild,buyer,role,price,status,created,updated) VALUES(?,?,?,?,?,?,'pending',?,?)",
     ).run(id, ctx.requestId, ctx.guildId, ctx.userId, role, price, now, now);
+    const options = g.sql("SELECT * FROM role_listing_options WHERE guild=? AND role=?").get(ctx.guildId, role);
+    if (options) g.sql("INSERT INTO role_purchase_options(purchase,duration_ms,emoji) VALUES(?,?,?)")
+      .run(id, options.duration_ms, options.emoji);
     return id;
   }
   claim(id) {
@@ -166,6 +177,9 @@ class RoleShop {
             ).run(p.buyer, remaining);
         } else if (status === "delivered") {
           g.economy.burn(p.price, "role purchase");
+          const options = g.sql("SELECT duration_ms FROM role_purchase_options WHERE purchase=?").get(p.id);
+          if (options?.duration_ms) g.sql("INSERT INTO role_expirations(guild,buyer,role,purchase,expires) VALUES(?,?,?,?,?)")
+            .run(p.guild, p.buyer, p.role, p.id, g.clock() + options.duration_ms);
         } else assert(false, "Invalid role purchase completion.");
         g.sql(
           "UPDATE role_purchases SET status=?,lease=NULL,lease_until=0,updated=?,error=? WHERE id=?",

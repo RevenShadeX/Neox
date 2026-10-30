@@ -92,6 +92,11 @@ function roleAPI(client) {
           me.roles.highest.comparePositionTo(role) > 0,
       };
     },
+    async remove(p) {
+      const guild = client.guilds.cache.get(p.guild) || await client.guilds.fetch(p.guild);
+      const member = await guild.members.fetch({ user: p.buyer, force: true, cache: false });
+      await member.roles.remove(p.role, `Neox timed role expired ${p.purchase}`);
+    },
     async add(p) {
       const guild =
         client.guilds.cache.get(p.guild) ||

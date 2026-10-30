@@ -35,7 +35,7 @@ class EmojiResolver {
     for (const [id, entry] of this.available)
       if (entry.application) this.available.delete(id);
     for (const emoji of emojis) {
-      if (emoji.name && /^neox_[a-z0-9_]+$/.test(emoji.name))
+      if (emoji.name && /^[a-zA-Z0-9_]{2,32}$/.test(emoji.name))
         this.byName.set(emoji.name, { id: emoji.id, animated: !!emoji.animated });
     }
     for (const emoji of emojis)

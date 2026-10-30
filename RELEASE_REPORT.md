@@ -145,3 +145,12 @@ Hunting now returns structured presentation data and a rarity-colored embed with
 Ranked player battles now require an opponent-only Accept Battle/Decline component. Challenges are stored in existing expiring UI sessions with a small partial pending index; no new persistent progression tables. Creation validates current membership, agreements, existing invitations and challenger cooldowns without awarding XP or wearing equipment. Acceptance rechecks membership/consent and executes existing combat atomically under the challenger's identity, exactly once. Completed/declined/expired/foreign-player/foreign-server controls cannot replay combat. Successful results clear invitation buttons. PvE/boss and consent-based dice-duel behavior remain intact.
 
 Verification: 878 tests passed, including both transports for hunt cards and real battle buttons, exact reward displays, invitation side-effect checks, owner/server validation, expiry, decline, replay protection and cooldown checks.
+
+
+## Optional role durations, listing emojis and automatic expiry
+
+Role listing modals now accept required price plus optional duration and emoji. Blank duration preserves permanent behavior; accepted durations range from 1s through 365d. Unicode emojis and validated accessible application emojis appear in listing text, details and select options. Old listings default to permanent/default-icon. Listing version checks prevent stale duration/emoji confirmations, and purchases snapshot their terms so later edits cannot alter them.
+
+Additive option/expiry tables preserve existing schemas and data. Expiry begins at confirmed delivery and is stored independently of purchase-history retention. A leased, bounded worker checks due jobs every five seconds, inspects current membership/ownership, removes only the purchased role and retries outages/permission failures. Permanent roles have no expiry jobs; existing owned roles cannot be purchased. Active expiry jobs block repurchase to avoid stale removals affecting a new grant. Deleted listings and pruned history do not lose existing obligations. Shutdown guards prevent late callbacks from touching a closed database.
+
+Validation: 892 tests passed, covering actual Discord modal submission and fresh server-emoji lookup, form defaults, duration/emoji validation, stale confirmation rollback, purchase snapshots, permanent grants, expiry removal, concurrent polling, retry behavior, absent roles, shutdown safety and restart recovery after history cleanup. Expiry visibility in rolepurchases and help were also updated.

@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { MAX } = require("./limits");
 const { migrate } = require("./migrations");
+const { migrateRoleOptions } = require("./role-options");
 function open(filename = "./data/neox.sqlite") {
   if (filename !== ":memory:")
     fs.mkdirSync(path.dirname(path.resolve(filename)), {
@@ -66,6 +67,7 @@ function open(filename = "./data/neox.sqlite") {
  `);
   try {
     migrate(db);
+    db.transaction(() => migrateRoleOptions(db)).immediate();
     db.exec("CREATE INDEX IF NOT EXISTS ui_queue_recovery ON ui_sessions(status,expires) WHERE kind='queue_delivery'");
     db.exec("CREATE INDEX IF NOT EXISTS ui_battle_pending ON ui_sessions(expires,owner) WHERE kind='battle_challenge' AND status='active'");
   } catch (error) {

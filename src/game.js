@@ -414,14 +414,9 @@ class Game {
         const rows = this.sql(
           "SELECT id,role,price,status FROM role_purchases WHERE buyer=? AND guild=? ORDER BY created DESC LIMIT 10",
         ).all(id, ctx.guildId);
-        return (
-          rows
-            .map(
-              (r) =>
-                `${r.id} • <@&${r.role}> • ${fmt(r.price)} Dark Coins • ${r.status}`,
-            )
-            .join("\n") || "No recent role purchases in this server."
-        );
+        const timed = this.sql("SELECT role,expires FROM role_expirations WHERE buyer=? AND guild=? ORDER BY expires LIMIT 10").all(id, ctx.guildId);
+        const history = rows.map((r) => `${r.id} • <@&${r.role}> • ${fmt(r.price)} Dark Coins • ${r.status}`).join("\n") || "No recent role purchases in this server.";
+        return history + (timed.length ? `\n\n⏳ Timed roles\n${timed.map((r) => `<@&${r.role}> • ${r.expires <= this.clock() ? "Expiry removal pending" : "Expires"} <t:${Math.ceil(r.expires / 1000)}:R>`).join("\n")}` : "");
       }
       case "duel": {
         if (["accept", "decline"].includes(a[0]))

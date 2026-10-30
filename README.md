@@ -284,3 +284,18 @@ Repeated prefix attempts in the same channel reuse the active notice. Cleanup ta
 `hunt` / `/hunt` now send an embed card with rarity-grouped monsters, copy counts and IDs, exact Dark Coins/hunting XP, streak, hunting level, global XP and active bonuses. Accent color follows the rarest encounter, and the next-hunt timestamp reflects the cooldown. Hunt results stay visible; temporary cooldown notices still clear automatically.
 
 `battle @member` / `/battle args:@member` opens an invitation with **Accept Battle** and **Decline** buttons. Only that member in the same server can respond, within two minutes. Both players must have accepted Neox rules and still be server members at acceptance. Invitations grant no progression, cause no equipment wear and do not start combat cooldowns. Challenger cooldowns are checked before sending and again when combat begins. Acceptance runs the existing ranked equipment combat once, updates the invitation to its result, and removes its buttons. Decline/expiry causes no combat. Invitations survive restarts in the existing expiring UI table. Ordinary PvE `battle` and `boss` continue immediately. Dice `duel` invitations retain their existing acceptance buttons.
+
+
+### Role-shop durations and custom emojis
+
+Use your server prefix with `roleshopadmin`, or `/roleshopadmin`. Choose **Add Role** (or **Edit Listing** for an existing role). The form has three fields:
+
+- **Price in Dark Coins** — required.
+- **Duration** — optional: `30m`, `2h`, `7d`, `4w` or up to `365d`. Seconds (`30s`) work for testing. Blank, `0` or `permanent` means no automatic removal.
+- **Emoji** — optional: one Unicode emoji such as 👑, or an accessible server/application emoji pasted as `<:name:ID>` / `<a:name:ID>` (its ID also works). Blank uses the default role tag.
+
+The emoji appears before role names and in dropdowns. Members see the duration before confirming. Editing a listing changes future purchases; each confirmed purchase keeps its own duration and emoji snapshot. Existing roles/purchases remain permanent unless they were bought with a duration. Members who already own the role cannot purchase it again. An outstanding timed grant also blocks repurchase until expiry removal completes.
+
+Duration starts when role delivery is confirmed, and `rolepurchases` shows active expiry times. Neox checks due expirations every five seconds, removes the purchased role, then clears the expiry job. Actual removal can be delayed by Discord outages, rate limits or missing role permissions; the job persists and retries with backoff. The bot must stay in the server with Manage Roles and above the sold role. Roles without a duration are never scheduled for removal.
+
+Expiry jobs survive restarts, listing deletion and routine purchase-history cleanup. Missing members/roles or already-removed roles finish safely when confirmed; inaccessible servers or uncertain ownership retain the job. No extra per-role timers or generated files are used. The worker has bounded concurrency and indexed due-job queries. Roles assigned as timed purchases remain subject to that purchased expiry even if an administrator independently reassigns the same role.

@@ -113,7 +113,7 @@ test("invalid role-price modal returns working owner-bound controls and a subseq
   await flush();
   assert.ok(retry.calls.some(([type]) => type === "modal"));
   s = f.game.sessions.get(s.id);
-  const valid = interaction(f, "modal", UI.cid(s, "saveprice"), { fields: { getTextInputValue: () => "50" } });
+  const valid = interaction(f, "modal", UI.cid(s, "saveprice"), { fields: { getTextInputValue: (field) => field === "price" ? "50" : "" } });
   client.emit(Events.InteractionCreate, valid.source);
   await flush();
   assert.equal(f.game.sql("SELECT price FROM role_listings WHERE role=?").get(R).price, 50);

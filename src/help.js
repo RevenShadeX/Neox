@@ -40,6 +40,7 @@ function guide(prefix, query) {
       { name: "🔎 Aliases", value: (command.aliases || []).map((x) => `\`${x}\``).join(" · ") || "Use the command name above." },
       { name: "🔐 Who can use it?", value: permission(key) },
     ];
+    if (key === "roleshopadmin") fields.push({ name: "⏳ Duration & emoji", value: "Add Role or Edit Listing opens price, duration and emoji fields. Duration accepts 30m, 2h or 7d (up to 365d); blank means permanent. Use one Unicode emoji or an accessible server/application emoji. Timed roles expire automatically after confirmed delivery. Listing edits affect future purchases." });
     if (key === "battle") fields.push(
       { name: "🧭 Endless Rift & bosses", value: `${safePrefix} battle fights your current stage. Victory advances it; defeat keeps it. Every 10th stage is a boss and every 50th is elite. Use ${safePrefix} boss for the separate Sovereign challenge.` },
       { name: "🤝 Ranked sparring", value: `${safePrefix} battle @user sends an invitation with Accept Battle and Decline buttons. Only the challenged player can respond before it expires. This is not a wager; no opponent coins are taken. Consent-based wagers use duel instead.` },

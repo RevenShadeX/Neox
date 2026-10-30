@@ -18,6 +18,7 @@ const { decoratePayload } = require("./emoji-decorate");
 const { lootImage, battleImage } = require("./visual-cards");
 const { ProfileService } = require("./profile-service");
 const { RoleRecovery } = require("./role-shop");
+const { RoleExpiry } = require("./role-expiry");
 const { roleAPI } = require("./discord-roles");
 const { DuelDelivery } = require("./duel-delivery");
 const { CooldownNotices } = require("./cooldown-notices");
@@ -95,6 +96,7 @@ function createClient(
   const profileService = new ProfileService(client, profiles),
     api = roles || roleAPI(client),
     recovery = new RoleRecovery(game, api),
+    expiry = new RoleExpiry(game, api),
     duelDelivery = new DuelDelivery(game, client),
     notices = new CooldownNotices({ clock: game.clock });
   let timer;
@@ -103,15 +105,17 @@ function createClient(
   client.neoxStop = async () => {
     clearInterval(timer);
     duelDelivery.stop();
-    await Promise.all([recovery.stop(), notices.stop()]);
+    await Promise.all([recovery.stop(), expiry.stop(), notices.stop()]);
   };
   client.destroy = () => {
     clearInterval(timer);
     duelDelivery.stop();
     void notices.stop();
+    void expiry.stop();
     return originalDestroy();
   };
   client.neoxRecovery = recovery;
+  client.neoxExpiry = expiry;
   client.neoxNotices = notices;
   const errorText = (err) =>
     err instanceof GameError
@@ -285,8 +289,9 @@ function createClient(
       const p = game
         .sql("SELECT status FROM role_purchases WHERE id=?")
         .get(output.rolePurchase);
+      const expires = game.sql("SELECT expires FROM role_expirations WHERE purchase=?").get(output.rolePurchase)?.expires;
       await transport.extra({
-        content: `Role purchase ${output.rolePurchase}: ${status || p?.status || "pending"}. Uncertain API requests are recovered automatically. Use rolepurchases for status, refunds for held refunds.`,
+        content: `Role purchase ${output.rolePurchase}: ${status || p?.status || "pending"}.${expires ? ` ⏳ Role expires <t:${Math.ceil(expires / 1000)}:R> and will be removed automatically.` : ""} Uncertain API requests are recovered automatically. Use rolepurchases for status, refunds for held refunds.`,
         allowedMentions: UI.allowedMentions,
       });
     }
@@ -507,7 +512,7 @@ function createClient(
     if (s.kind !== "rules") game.requireAgreement(ctx.userId);
     const input = { value: i.values?.[0] };
     if (isModal)
-      for (const field of ["wager", "quantity", "price"]) {
+      for (const field of ["wager", "quantity", "price", "duration", "emoji"]) {
         try {
           input[field] = i.fields.getTextInputValue(field);
         } catch {}
@@ -532,6 +537,26 @@ function createClient(
       roleChecks.add(id);
       try {
         const role = s.state.role;
+        ctx.availableEmojis = [
+          ...[...(emojis.byName || [])].map(([name, entry]) => ({ name, ...entry })),
+          ...(client.application?.emojis?.cache?.values?.() || []),
+          ...(i.guild?.emojis?.cache?.values?.() || []),
+        ];
+        const emojiText = String(input.emoji || "").trim();
+        const emojiId = /^<a?:[^:]+:(\d{5,22})>$/.exec(emojiText)?.[1] ||
+          (/^\d{5,22}$/.test(emojiText) ? emojiText : null);
+        if (action === "saveprice" && emojiId && !ctx.availableEmojis.some((e) => e.id === emojiId)) {
+          // Fresh lookups also support emojis uploaded after the bot started.
+          for (const manager of [client.application?.emojis, i.guild?.emojis]) {
+            if (!manager?.fetch) continue;
+            try {
+              const emoji = await manager.fetch(emojiId);
+              if (emoji?.id === emojiId) { ctx.availableEmojis.push(emoji); break; }
+            } catch (error) {
+              if (error.status !== 404 && error.code !== 10014) throw error;
+            }
+          }
+        }
         ctx.roleFacts = await api.inspect({
           guild: ctx.guildId,
           role,
@@ -558,11 +583,11 @@ function createClient(
     );
     const tick = () => {
       if (client.isReady())
-        Promise.all([recovery.recover(), duelDelivery.recover()])
+        Promise.all([recovery.recover(), expiry.recover(), duelDelivery.recover()])
           .catch((e) => logError("Background recovery failed:", e));
     };
     tick();
-    timer = setInterval(tick, 15000);
+    timer = setInterval(tick, 5000);
     timer.unref();
     if (client.application?.emojis)
       client.application.emojis

@@ -95,7 +95,7 @@ const buttonNames = {
   "Loot boxes":"neox_chest",Consumables:"neox_potion_hp",
   "Confirm Purchase":"neox_success","Confirm Payment":"neox_success",
   "Enter Quantity":"neox_info","Change Quantity":"neox_info",
-  "Edit Price":"neox_settings","Remove Listing":"neox_x",
+  "Edit Price":"neox_settings","Edit Listing":"neox_settings","Remove Listing":"neox_x",
   Accept:"neox_success",Confirm:"neox_success",
   Attack:"neox_actions_attack",Defend:"neox_defend",
   "Use Item":"neox_item",Flee:"neox_run",

@@ -3,6 +3,7 @@ const { token } = require("./role-shop");
 const { assert } = require("./errors");
 const C = require("./content");
 const { MAX } = require("./limits");
+const { durationText } = require("./role-options");
 const PAGE = 12;
 function items(category) {
   if (category === "gems") return C.gems;
@@ -241,13 +242,17 @@ class Sessions {
         v.role = listing.role;
         v.price = listing.price;
         v.name = listing.name;
+        const options = g.sql("SELECT * FROM role_listing_options WHERE guild=? AND role=?").get(ctx.guildId, listing.role);
+        v.durationMs = options?.duration_ms || 0;
+        v.emoji = options?.emoji || "";
+        v.listingVersion = listing.version;
         v.stage = "detail";
       } else if (action === "confirmrole") {
         assert(
           !admin && v.role && v.stage === "detail",
           "Choose a role listing first.",
         );
-        const purchase = g.roleShop.reserve(ctx, v.role, v.price);
+        const purchase = g.roleShop.reserve(ctx, v.role, v.price, v.listingVersion);
         this.save(s, true);
         return {
           content: `Role purchase ${purchase} is processing. Payment is held safely until role delivery or refund.`,
@@ -264,22 +269,32 @@ class Sessions {
         if (action === "pickrole") {
           assert(/^\d{5,22}$/.test(input.value || ""), "Select a role.");
           v.role = input.value;
+          const listing = g.sql("SELECT * FROM role_listings WHERE guild=? AND role=?").get(ctx.guildId, v.role);
+          const options = g.sql("SELECT * FROM role_listing_options WHERE guild=? AND role=?").get(ctx.guildId, v.role);
+          v.price = listing?.price || 100;
+          v.durationMs = options?.duration_ms || 0;
+          v.emoji = options?.emoji || "";
         }
         assert(v.role, "Select a role first.");
         const saved = this.save(s);
-        return this.modal(
+        const result = this.modal(
           saved,
           "saveprice",
-          "Neox | Role Price",
+          "Neox | Role Listing",
           "price",
           "Price in Dark Coins",
           String(v.price || 100),
         );
+        result.presentation.extraFields = [
+          { id: "duration", label: "Duration (blank = permanent)", placeholder: "30m, 2h, 7d, or blank", value: v.durationMs ? durationText(v.durationMs) : "" },
+          { id: "emoji", label: "Emoji (optional)", placeholder: "👑 or a Neox application emoji", value: v.emoji || "" },
+        ];
+        return result;
       } else if (action === "saveprice") {
         assert(admin && v.role, "Select a role first.");
         const text = String(input.price || "").trim();
         assert(/^\d{1,13}$/.test(text), "Use a whole positive price.");
-        g.roleShop.configure(ctx, "save", v.role, Number(text));
+        g.roleShop.configure(ctx, "save", v.role, Number(text), { duration: input.duration ?? "", emoji: input.emoji ?? "" });
         v.stage = "browse";
         delete v.role;
       } else if (action === "removerole") {
