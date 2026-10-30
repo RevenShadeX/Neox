@@ -621,37 +621,25 @@ class Game {
       }
       case "sellanimals": {
         assert(a[0], "Usage: sellmonsters monster-id|all [quantity]");
-        assert(
-          a[0] !== "all" || !a[1],
-          "Use sellmonsters all without a quantity.",
-        );
-        let count = 0;
-        const rows =
-          a[0] === "all"
-            ? this.sql(
-                "SELECT item,qty FROM inventory WHERE user=? AND kind='animal'",
-              ).all(id)
-            : [
-                {
-                  item: find(C.animals, a[0]).id,
-                  qty: this.qty(id, "animal", a[0]),
-                },
-              ];
+        assert(a[0] !== "all" || !a[1], "Use sellmonsters all without a quantity.");
+        const rows = a[0] === "all"
+          ? this.sql("SELECT item,qty FROM inventory WHERE user=? AND kind='animal'").all(id)
+          : [{ item: find(C.animals, a[0]).id, qty: this.qty(id, "animal", a[0]) }];
+        let count = 0, earned = 0;
         for (const row of rows) {
-          const quantity =
-            a[0] === "all"
-              ? Math.max(0, row.qty - 1)
-              : a[1]
-                ? n(a[1], 1, 1000000)
-                : 1;
+          const quantity = a[0] === "all" ? Math.max(0, row.qty - 1) : a[1] ? n(a[1], 1, 1000000) : 1;
           if (!quantity) continue;
-          const x = find(C.animals, row.item);
-          this.item(id, "animal", x.id, -quantity);
+          const animal = find(C.animals, row.item);
+          assert(quantity <= row.qty, "Not enough monsters.");
+          const coins = Math.floor(animal.value / 4) * quantity;
+          assert(Number.isSafeInteger(earned + coins), "Sale amount too large.");
+          this.item(id, "animal", animal.id, -quantity);
+          earned += coins;
           count += quantity;
         }
-        assert(count > 0, "No monsters to sell (all keeps one of each).");
-        // Releasing duplicates does not mint new Dark Coins.
-        return `Released ${fmt(count)} duplicate monsters. No Dark Coins created.`;
+        assert(count > 0, "No monsters available to sell.");
+        this.money(id, earned, "monster sales");
+        return `**NEOX • MONSTERS SOLD**\nSold: **${fmt(count)} monsters**\nEarned: **${fmt(earned)} Dark Coins**\n\nSelling all keeps one of each species. Sacrifice duplicates instead to earn Rift Essence.`;
       }
       case "huntstats":
         return `Level ${level(p)} • ${fmt(p.xp)} hunting XP\n${fmt(p.hunts)} hunts • streak ${p.streak}/50\n${this.sql("SELECT COUNT(*) AS n FROM discoveries WHERE user=?").get(id).n}/200 species discovered\nNext level: ${fmt(level(p) ** 2 * 100)} XP`;
