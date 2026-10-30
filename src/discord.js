@@ -138,7 +138,7 @@ function createClient(
     const shown = items.slice(0,25);
     return {
       embeds: [new EmbedBuilder().setColor(0xB91C32).setTitle("NEOX | Global Shop")
-        .setDescription(`**${category.toUpperCase()}**\\n${shown.map(x => `• ${x.name || x.id}: **${x.price.toLocaleString()}** Dark Coins`).join("\\n")}\\n\\nChoose an item to purchase.`)],
+        .setDescription(`**${category.toUpperCase()}**\n${shown.map(x => `• ${x.name || x.id}: **${x.price.toLocaleString()}** Dark Coins`).join("\n")}\n\nChoose an item to purchase.`)],
       components: [
         new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId(`neox:shop:${owner}:gems`).setLabel("Gems").setStyle(ButtonStyle.Primary),
