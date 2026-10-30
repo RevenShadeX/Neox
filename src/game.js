@@ -552,10 +552,10 @@ class Game {
         const sections = [];
         for (const rarity of [...C.rarities].reverse()) {
           const rows = ordered.filter((entry) => entry.animal.rarity === rarity);
-          if (rows.length) sections.push(`**${rarity.toUpperCase()}**\\n${rows.map(({ animal, qty }) => `${animal.id} • ${animal.name}${qty > 1 ? ` ×${qty}` : ""}`).join("\\n")}`);
+          if (rows.length) sections.push(`**${rarity.toUpperCase()}**\n${rows.map(({ animal, qty }) => `${animal.id} • ${animal.name}${qty > 1 ? ` ×${qty}` : ""}`).join("\n")}`);
         }
         const boosts = Object.entries(b).map(([kind, bonus]) => `${kind} +${Math.round(bonus * 100)}%`).join(" • ");
-        return `**NEOX • HUNT COMPLETE**\\n\\n${sections.join("\\n\\n")}\\n\\n**REWARDS**\\n🪙 +${fmt(reward)} Dark Coins • ✨ +${fmt(xp)} hunting XP\\n🔥 Streak ${streak} • 🎯 Hunting level ${level(this.player(id))}${boosts ? `\\n💎 Active gems: ${boosts}` : ""}\\n\\nManual hunt • 20s cooldown`;
+        return `**NEOX • HUNT COMPLETE**\n\n${sections.join("\n\n")}\n\n**REWARDS**\n🪙 +${fmt(reward)} Dark Coins • ✨ +${fmt(xp)} hunting XP\n🔥 Streak ${streak} • 🎯 Hunting level ${level(this.player(id))}${boosts ? `\n💎 Active gems: ${boosts}` : ""}\n\nManual hunt • 20s cooldown`;
       }
       case "zoo": {
         const rows = this.sql(
