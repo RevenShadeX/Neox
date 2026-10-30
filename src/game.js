@@ -626,23 +626,35 @@ class Game {
         return `${count}/200 species discovered forever (selling does not erase discoveries).\nMilestones: 10, 25, 50, 100, 150, 200; each grants a box.\n${milestones ? `Claimed milestone boxes.` : "Use collection claim to collect unlocked rewards."}`;
       }
       case "inventory": {
-        const rows = this.sql(
+        const entries = this.sql(
           "SELECT kind,item,qty FROM inventory WHERE user=? ORDER BY kind,item",
-        )
-          .all(id)
-          .map(
-            (r) =>
-              `${inventoryLabel(r.kind, r.item)} ×${fmt(r.qty)}`,
-          );
-        rows.push(
-          ...this.sql("SELECT * FROM gear WHERE user=? ORDER BY id")
-            .all(id)
-            .map(
-              (g) =>
-                `${itemIcon(C.equipment.find((x) => x.id === g.item) || {})} #${g.id} ${C.equipment.find((x) => x.id === g.item)?.name || g.item} L${g.level} +${g.enhance}${g.slot ? " ✅ Equipped" : ""}`,
-            ),
-        );
-        return `🎒 **Your inventory**\n${this.page(rows, a[0])}`;
+        ).all(id);
+        const gear = this.sql("SELECT * FROM gear WHERE user=? ORDER BY id").all(id);
+        const groups = C.rarities.map((rarity) => ({ rarity, rows: [] }));
+        const supplies = [];
+        for (const r of entries) {
+          if (r.kind === "animal") {
+            const animal = C.animals.find((x) => x.id === r.item);
+            if (animal) groups[animal.tier].rows.push(`${animal.id} • ${animal.name} ×${fmt(r.qty)}`);
+          } else {
+            supplies.push(`${inventoryLabel(r.kind, r.item)} ×${fmt(r.qty)}`);
+          }
+        }
+        for (const g of gear) {
+          const item = C.equipment.find((x) => x.id === g.item);
+          const row = `${itemIcon(item || {})} #${g.id} ${item?.name || g.item} • Lv.${g.level} +${g.enhance}${g.slot ? " • EQUIPPED" : ""}`;
+          if (item && groups[item.tier]) groups[item.tier].rows.push(row);
+          else supplies.push(row);
+        }
+        const lines = [];
+        for (let i = groups.length - 1; i >= 0; i--) {
+          if (!groups[i].rows.length) continue;
+          lines.push(`**✦ ${groups[i].rarity.toUpperCase()}**`);
+          lines.push(...groups[i].rows);
+          lines.push("");
+        }
+        if (supplies.length) lines.push("**SUPPLIES • GEMS • BOXES**", ...supplies);
+        return `**NEOX • INVENTORY**\n${this.page(lines, a[0], 16)}`;
       }
       case "gems":
         return `${
