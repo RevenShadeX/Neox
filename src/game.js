@@ -238,6 +238,9 @@ class Game {
           this.sql(
             "UPDATE players SET display_name=? WHERE id=? AND display_name!=?",
           ).run(cleanName(ctx.displayName), p.id, cleanName(ctx.displayName));
+        if (!["help", "rules", "agree", "decline"].includes(name))
+          assert(this.sql("SELECT 1 FROM agreements WHERE user=?").get(p.id),
+            "Accept Neox rules first: use n rules, then n agree.");
         const rawResult = this.run(name, args, p, ctx);
         const result =
           typeof rawResult === "string" ? { content: rawResult } : rawResult;
@@ -284,6 +287,44 @@ class Game {
       return x;
     };
     switch (name) {
+      case "rules":
+        return "NEOX RULES • Dark Coins are virtual, have no cash value, and cannot be redeemed or purchased for real money. Games involve random outcomes; winnings are not guaranteed. No exploits, automation abuse, or trading for real money. Respect Discord rules. Accept with n agree or decline with n decline.";
+      case "agree":
+        this.sql("INSERT OR IGNORE INTO agreements(user,accepted_at) VALUES(?,?)").run(id, this.clock());
+        return "Neox rules accepted. Your global game account is unlocked.";
+      case "decline":
+        this.sql("DELETE FROM agreements WHERE user=?").run(id);
+        return "Rules declined. Gameplay is locked until you accept with n agree.";
+      case "duel": {
+        assert(ctx.guildId, "Dice duels are only available in servers.");
+        if (a[0] === "accept" || a[0] === "decline") {
+          const challenge = this.sql("SELECT * FROM dice_duels WHERE guild=? AND opponent=? AND expires>?").get(ctx.guildId,id,this.clock());
+          assert(challenge, "No active dice duel challenge for you in this server.");
+          this.sql("DELETE FROM dice_duels WHERE id=?").run(challenge.id);
+          if (a[0] === "decline") return "Dice duel declined.";
+          assert(this.sql("SELECT 1 FROM agreements WHERE user=?").get(challenge.challenger), "Challenger must accept the rules.");
+          const challenger = this.sql("SELECT wallet FROM players WHERE id=?").get(challenge.challenger);
+          const opponent = this.sql("SELECT wallet FROM players WHERE id=?").get(id);
+          assert(challenger.wallet >= challenge.wager && opponent.wallet >= challenge.wager, "Both players need enough Dark Coins.");
+          const rollA = this.rng.int(1,6), rollB = this.rng.int(1,6);
+          if (rollA === rollB) return `🎲 Tie! <@${challenge.challenger}> rolled ${rollA}; <@${id}> rolled ${rollB}. No coins moved.`;
+          const winner = rollA > rollB ? challenge.challenger : id;
+          const loser = rollA > rollB ? id : challenge.challenger;
+          this.money(loser, -challenge.wager, "dice duel loss");
+          this.money(winner, challenge.wager, "dice duel win");
+          return `🎲 <@${challenge.challenger}> rolled ${rollA} • <@${id}> rolled ${rollB}. <@${winner}> wins ${fmt(challenge.wager)} Dark Coins from <@${loser}>!`;
+        }
+        assert(ctx.targetGuildMember !== false, "Challenge a member of this server.");
+        const opponent = userId(a[0]);
+        assert(opponent !== id, "You cannot duel yourself.");
+        assert(this.sql("SELECT 1 FROM agreements WHERE user=?").get(opponent), "That player must accept Neox rules first.");
+        const wager = n(a[1],1,this.maxBet);
+        assert(p.wallet >= wager, "Not enough Dark Coins.");
+        this.sql("DELETE FROM dice_duels WHERE guild=? AND opponent=? AND expires<=?").run(ctx.guildId,opponent,this.clock());
+        assert(!this.sql("SELECT 1 FROM dice_duels WHERE guild=? AND opponent=?").get(ctx.guildId,opponent), "That player already has a pending challenge.");
+        this.sql("INSERT INTO dice_duels(guild,challenger,opponent,wager,expires) VALUES(?,?,?,?,?)").run(ctx.guildId,id,opponent,wager,this.clock()+120000);
+        return `🎲 <@${id}> challenges <@${opponent}> to a ${fmt(wager)} Dark Coin dice duel! <@${opponent}>: use n duel accept or n duel decline within 2 minutes. Higher roll wins; ties refund both.`;
+      }
       case "help": {
         if (a[0]) {
           const key = registry.resolve(a[0]);
