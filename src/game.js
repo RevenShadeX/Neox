@@ -701,8 +701,8 @@ class Game {
         this.item(id, "gem", gemId, -1);
         this.sql(
           "INSERT INTO effects(user,kind,item,expires,uses) VALUES(?,?,?,?,?) ON CONFLICT(user,kind) DO UPDATE SET item=excluded.item,expires=excluded.expires,uses=excluded.uses",
-        ).run(id, g.kind, gemId, this.clock() + g.duration, durability);
-        return `Activated ${g.name}: ${durability} hunts or ${g.duration / 3600000} hours, whichever ends first.`;
+        ).run(id, g.kind, gemId, this.clock() + (gemId.includes("-") ? 30 * 86400000 : g.duration), durability);
+        return `Activated ${g.name}: ${durability} hunts or ${gemId.includes("-") ? "30 days" : `${g.duration / 3600000} hours`}, whichever ends first.`;
       }
       case "craft":
       case "upgrade": {
