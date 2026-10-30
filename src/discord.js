@@ -150,6 +150,14 @@ function createClient(
       ], allowedMentions,
     };
   };
+  const duelCard = (output, opponent) => ({
+    content: output.content,
+    components: [new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`neox:duel:${opponent}:accept`).setLabel("Accept Duel").setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`neox:duel:${opponent}:decline`).setLabel("Decline").setStyle(ButtonStyle.Danger)
+    )],
+    allowedMentions: {users:[opponent],roles:[],repliedUser:false},
+  });
   const needsAgreement = (content) => typeof content === "string" && content.includes("Accept Neox rules first:");
   client.on(Events.MessageCreate, async (message) => {
     if (
@@ -197,7 +205,9 @@ function createClient(
       output = { content: errorText(err) };
     }
     try {
-      if (needsAgreement(output.content) || parsed.command === "rules") {
+      if (registry.resolve(parsed.command) === "duel" && parsed.args.length === 2 && output.content.includes("challenges")) {
+        await message.channel.send(duelCard(output,parsed.args[0].replace(/[^0-9]/g,"")));
+      } else if (needsAgreement(output.content) || parsed.command === "rules") {
         await message.channel.send(agreementCard());
       } else if (output.presentation?.kind === "coinflip") {
         await presentCoinflip(
@@ -242,6 +252,22 @@ function createClient(
     }
   });
   client.on(Events.InteractionCreate, async (interaction) => {
+    if (interaction.isButton() && interaction.customId.startsWith("neox:duel:")) {
+      const [, , opponent, action] = interaction.customId.split(":");
+      if (interaction.user.id !== opponent) {
+        await interaction.reply({content:"Only the challenged player can respond.",flags:64});
+        return;
+      }
+      try {
+        const result = game.executeResult("duel",[action],{
+          userId:interaction.user.id,guildId:interaction.guildId,requestId:interaction.id,
+        });
+        await interaction.update({content:result.content,components:[],allowedMentions:{parse:[]}});
+      } catch(err) {
+        await interaction.reply({content:errorText(err),flags:64});
+      }
+      return;
+    }
     if (interaction.isButton() && interaction.customId.startsWith("neox:shop:")) {
       const [, , owner, category] = interaction.customId.split(":");
       if (interaction.user.id !== owner) return interaction.reply({content:"This shop menu belongs to another player.",flags:64});
@@ -325,6 +351,14 @@ function createClient(
       await interaction.reply(coinflipPanel(interaction.user.id));
       return;
     }
+    if (interaction.commandName === "duel") {
+      const args = parseArguments(interaction.options.getString("args"));
+      if (args.length === 2) {
+        const target = args[0].replace(/[^0-9]/g,"");
+        try { await interaction.guild.members.fetch(target); }
+        catch { await interaction.reply({content:"That player must be in this server.",flags:64}); return; }
+      }
+    }
     try {
       await interaction.deferReply();
     } catch (err) {
@@ -352,6 +386,7 @@ function createClient(
               PermissionFlagsBits.ManageGuild,
             ) || false,
           requestId: interaction.id,
+          targetGuildMember: true,
         },
       );
     } catch (err) {
@@ -394,6 +429,9 @@ function createClient(
             allowedMentions,
           });
         }
+      } else if (interaction.commandName === "duel" && output.content.includes("challenges")) {
+        const args = parseArguments(interaction.options.getString("args"));
+        await interaction.editReply(duelCard(output,args[0].replace(/[^0-9]/g,"")));
       } else if (needsAgreement(output.content) || interaction.commandName === "rules") {
         await interaction.editReply(agreementCard());
       } else {
