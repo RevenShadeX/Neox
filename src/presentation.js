@@ -57,7 +57,7 @@ function levelUpPayload(level) {
       {
         color: 0xb91c32,
         title: "NEOX — LEVEL UP",
-        description: `Congratulations, <@${level.userId}>!\n\nLevel ${level.oldLevel} → Level ${level.newLevel}\nReward: +${level.reward.toLocaleString("en-US")} Dark Coins\nTotal Balance: ${level.balance.toLocaleString("en-US")} Dark Coins${level.pending ? `\nPending rewards: ${level.pending.toLocaleString("en-US")} (use levelrewards after making wallet room)` : ""}`,
+        description: `Congratulations, <@${level.userId}>!\n\nLevel ${level.oldLevel} → Level ${level.newLevel}\nReward: +${level.reward.toLocaleString("en-US")} Doolar\nTotal Balance: ${level.balance.toLocaleString("en-US")} Doolar${level.pending ? `\nPending rewards: ${level.pending.toLocaleString("en-US")} (use levelrewards after making wallet room)` : ""}`,
       },
     ],
     allowedMentions,

@@ -52,7 +52,7 @@ class Duels {
     assert(
       g.player(ctx.userId).wallet >= wager &&
         g.player(opponent).wallet >= wager,
-      "Both players need enough Dark Coins.",
+      "Both players need enough Doolar.",
     );
     const id = token(),
       now = g.clock(),
@@ -81,7 +81,7 @@ class Duels {
     this.cleanup();
     this.membership(ctx, ctx.userId);
     this.available(ctx.userId);
-    assert(g.player(ctx.userId).wallet >= wager, "Not enough Dark Coins.");
+    assert(g.player(ctx.userId).wallet >= wager, "Not enough Doolar.");
     const candidate = this.candidate(ctx.guildId, wager);
     if (
       candidate &&
@@ -111,7 +111,7 @@ class Duels {
     g.sql("INSERT INTO ui_sessions(id,owner,guild,kind,state,expires,created) VALUES(?,?,?,'queue_delivery','{}',?,?)")
       .run(id, ctx.userId, ctx.guildId, expires, g.clock());
     return {
-      content: `Searching this server for a ${wager.toLocaleString("en-US")} Dark Coin duel. Both players must accept the matched challenge. No coins are deducted now.`,
+      content: `Searching this server for a ${wager.toLocaleString("en-US")} Doolar duel. Both players must accept the matched challenge. No coins are deducted now.`,
       presentation: { kind: "queue", id, owner: ctx.userId, expires },
     };
   }
@@ -175,7 +175,7 @@ class Duels {
       b = g.player(d.opponent);
     assert(
       a.wallet >= d.wager && b.wallet >= d.wager,
-      "Both players need enough Dark Coins at acceptance.",
+      "Both players need enough Doolar at acceptance.",
     );
     assert(
       a.wallet <= MAX - d.wager && b.wallet <= MAX - d.wager,
@@ -197,13 +197,13 @@ class Duels {
     ).run(winner ? "settled" : "tied", rollA, rollB, winner, id);
     g.sql("DELETE FROM duel_presence WHERE reference=?").run(id);
     return {
-      content: `🎲 <@${d.challenger}> rolled ${rollA} • <@${d.opponent}> rolled ${rollB}. ${winner ? `<@${winner}> wins ${d.wager.toLocaleString("en-US")} Dark Coins from the other player.` : "Tie! No coins moved."}`,
+      content: `🎲 <@${d.challenger}> rolled ${rollA} • <@${d.opponent}> rolled ${rollB}. ${winner ? `<@${winner}> wins ${d.wager.toLocaleString("en-US")} Doolar from the other player.` : "Tie! No coins moved."}`,
     };
   }
   result(id) {
     const d = this.game.sql("SELECT * FROM duel_matches WHERE id=?").get(id);
     return {
-      content: `<@${d.challenger}> challenges <@${d.opponent}> to a ${d.wager.toLocaleString("en-US")} Dark Coin dice duel. Higher roll wins; ties transfer nothing. Expires in two minutes.`,
+      content: `<@${d.challenger}> challenges <@${d.opponent}> to a ${d.wager.toLocaleString("en-US")} Doolar dice duel. Higher roll wins; ties transfer nothing. Expires in two minutes.`,
       presentation: { kind: "duel", ...d },
     };
   }

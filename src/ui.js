@@ -41,7 +41,7 @@ const embed = (title, description) =>
     .setTitle(`NEOX | ${title}`)
     .setDescription(description)
     .setFooter({
-      text: "Dark Coins are virtual • Never purchased or redeemed for money",
+      text: "Doolar are virtual • Never purchased or redeemed for money",
     });
 const cid = (s, action) => `nx:${s.id}:${s.version}:${action}`;
 function panel(game, s) {
@@ -52,7 +52,7 @@ function panel(game, s) {
   if (s.kind === "rules") {
     card = embed(
       "📜 Player Agreement",
-      "**Virtual currency:** Dark Coins have no cash value; no purchases, redemption, or real-money trading.\n\n**Chance:** Coinflip, dice, slots and duels use secure random outcomes. Winnings are never guaranteed. Casino winnings are paid directly by Neox.\n\n**Fair play:** No exploits, currency duplication, automation abuse, or alternate-account abuse.\n\n**Discord:** Follow Discord’s Terms, Community Guidelines and your server rules.\n\nAccept globally to unlock gameplay, or decline to remain locked.",
+      "**Virtual currency:** Doolar have no cash value; no purchases, redemption, or real-money trading.\n\n**Chance:** Coinflip, dice, slots and duels use secure random outcomes. Winnings are never guaranteed. Casino winnings are paid directly by Neox.\n\n**Fair play:** No exploits, currency duplication, automation abuse, or alternate-account abuse.\n\n**Discord:** Follow Discord’s Terms, Community Guidelines and your server rules.\n\nAccept globally to unlock gameplay, or decline to remain locked.",
     );
     components = [
       row(
@@ -63,7 +63,7 @@ function panel(game, s) {
   } else if (s.kind === "payment") {
     card = embed(
       "Confirm Payment",
-      `Send **${v.amount.toLocaleString("en-US")} Dark Coins** to <@${v.recipient}>?\n\nThis transfer is final. No coins will move until you confirm.`,
+      `Send **${v.amount.toLocaleString("en-US")} Doolar** to <@${v.recipient}>?\n\nThis transfer is final. No coins will move until you confirm.`,
     );
     components = [row(
       button(id("confirm"), "Confirm Payment", ButtonStyle.Danger),
@@ -71,7 +71,7 @@ function panel(game, s) {
     )];
   } else if (s.kind === "coinflip") {
     card = embed(
-      "🪙 Dark Coinflip",
+      "🪙 Doolar Coinflip",
       "Choose a side, then enter your wager in the modal.\n\nHeads / tails: **50% each**. A win returns **2×** including stake; a loss returns **0**. Winnings are paid directly by Neox; no treasury funding is required.",
     );
     components = [
@@ -104,7 +104,7 @@ function panel(game, s) {
       const shown = catalog.slice(page * PAGE, (page + 1) * PAGE);
       card = embed(
         "🛍️ Global Shop",
-        `**${v.category.toUpperCase()}** • Page ${page + 1}/${pages}\n\n${shown.map((x) => `${itemIcon(x)} ${markdownName(x.name || x.id)} • **${x.price.toLocaleString("en-US")} Dark Coins**`).join("\n")}\n\nChoose an item, enter a quantity, then confirm your purchase.`,
+        `**${v.category.toUpperCase()}** • Page ${page + 1}/${pages}\n\n${shown.map((x) => `${itemIcon(x)} ${markdownName(x.name || x.id)} • **${x.price.toLocaleString("en-US")} Doolar**`).join("\n")}\n\nChoose an item, enter a quantity, then confirm your purchase.`,
       );
       components = [
         category,
@@ -117,7 +117,7 @@ function panel(game, s) {
                 label: (x.name || x.id).slice(0, 100),
                 emoji: itemIcon(x),
                 value: x.id,
-                description: `${x.price.toLocaleString("en-US")} Dark Coins`,
+                description: `${x.price.toLocaleString("en-US")} Doolar`,
               })),
             ),
         ),
@@ -138,7 +138,7 @@ function panel(game, s) {
               : "\nCompanion training supplies.";
       card = embed(
         v.stage === "confirm" ? "Confirm Purchase" : "Item Information",
-        `${itemIcon(selected)} **${markdownName(selected.name || selected.id)}**\nUnit price: **${v.price.toLocaleString("en-US")} Dark Coins**${details}${v.stage === "confirm" ? `\n\nQuantity: ${v.quantity}\nTotal: **${(v.price * v.quantity).toLocaleString("en-US")} Dark Coins**` : "\n\nChoose a quantity before confirming."}`,
+        `${itemIcon(selected)} **${markdownName(selected.name || selected.id)}**\nUnit price: **${v.price.toLocaleString("en-US")} Doolar**${details}${v.stage === "confirm" ? `\n\nQuantity: ${v.quantity}\nTotal: **${(v.price * v.quantity).toLocaleString("en-US")} Doolar**` : "\n\nChoose a quantity before confirming."}`,
       );
       components = [
         category,
@@ -184,7 +184,7 @@ function panel(game, s) {
     } else if (v.stage === "detail" && v.role) {
       card = embed(
         admin ? "Manage Role Listing" : "Confirm Role Purchase",
-        `${v.emoji || "🏷️"} **${markdownName(v.name || "Role")}**\nPrice: **${v.price.toLocaleString("en-US")} Dark Coins**\n⏳ Duration: **${durationText(v.durationMs)}**${v.durationMs ? " • Removed automatically after expiry" : ""}\n\n${admin ? "Edit price, duration and emoji, or remove this server’s listing." : "Payment is held in escrow until role delivery or a safe refund. Role purchases consume existing coins."}`,
+        `${v.emoji || "🏷️"} **${markdownName(v.name || "Role")}**\nPrice: **${v.price.toLocaleString("en-US")} Doolar**\n⏳ Duration: **${durationText(v.durationMs)}**${v.durationMs ? " • Removed automatically after expiry" : ""}\n\n${admin ? "Edit price, duration and emoji, or remove this server’s listing." : "Payment is held in escrow until role delivery or a safe refund. Role purchases consume existing coins."}`,
       );
       components = [
         row(
@@ -206,7 +206,7 @@ function panel(game, s) {
     } else {
       card = embed(
         admin ? "Server Role Shop Management" : "Server Role Shop",
-        `Shop: **${enabled ? "Enabled" : "Disabled"}** • Page ${page + 1}/${pages}\n\n${list.map((l) => `${l.emoji || "🏷️"} ${markdownName(l.name)} • ${l.price.toLocaleString("en-US")} Dark Coins • ${durationText(l.duration_ms)}`).join("\n") || "No listings configured."}\n\n${admin ? "Management requires Manage Server and Manage Roles on every action." : "Only listings from this server can be purchased."}`,
+        `Shop: **${enabled ? "Enabled" : "Disabled"}** • Page ${page + 1}/${pages}\n\n${list.map((l) => `${l.emoji || "🏷️"} ${markdownName(l.name)} • ${l.price.toLocaleString("en-US")} Doolar • ${durationText(l.duration_ms)}`).join("\n") || "No listings configured."}\n\n${admin ? "Management requires Manage Server and Manage Roles on every action." : "Only listings from this server can be purchased."}`,
       );
       if (admin)
         components.push(
@@ -231,7 +231,7 @@ function panel(game, s) {
                   label: l.name.slice(0, 100),
                   emoji: optionEmoji(l.emoji),
                   value: l.role,
-                  description: `${l.price.toLocaleString("en-US")} Dark Coins • ${durationText(l.duration_ms)}`,
+                  description: `${l.price.toLocaleString("en-US")} Doolar • ${durationText(l.duration_ms)}`,
                 })),
               ),
           ),
@@ -270,7 +270,7 @@ function duel(p) {
     embeds: [
       embed(
         "Dice Duel",
-        `<@${p.challenger}> vs <@${p.opponent}>\nWager: **${p.wager.toLocaleString("en-US")} Dark Coins each**\n\nOne fair six-sided roll each. Winner gains the loser’s wager; ties move nothing. No coins deducted before both accept.\n\n${p.random ? `Accepted: ${p.accepted_a ? "✓" : "…"} challenger / ${p.accepted_b ? "✓" : "…"} opponent` : "The challenger has consented. Only the challenged player may accept or decline."}\nExpires <t:${Math.floor(p.expires / 1000)}:R>.`,
+        `<@${p.challenger}> vs <@${p.opponent}>\nWager: **${p.wager.toLocaleString("en-US")} Doolar each**\n\nOne fair six-sided roll each. Winner gains the loser’s wager; ties move nothing. No coins deducted before both accept.\n\n${p.random ? `Accepted: ${p.accepted_a ? "✓" : "…"} challenger / ${p.accepted_b ? "✓" : "…"} opponent` : "The challenger has consented. Only the challenged player may accept or decline."}\nExpires <t:${Math.floor(p.expires / 1000)}:R>.`,
       ),
     ],
     components: [
@@ -299,7 +299,7 @@ function help(p) {
     content: "",
     embeds: [embed(p.title, p.description).setColor(0x5865f2)
       .addFields(p.fields)
-      .setFooter({ text: "Neox • [optional] arguments • Dark Coins have no real-world value" })],
+      .setFooter({ text: "Neox • [optional] arguments • Doolar have no real-world value" })],
     allowedMentions,
   };
 }
@@ -314,7 +314,7 @@ function hunt(output) {
     if (entries.length) card.addFields({ name: `✦ ${C.rarities[tier]}`, value: entries.map(({ animal, qty }) => `🐾 **${animal.name}** \`${animal.id}\`${qty > 1 ? ` ×${qty}` : ""}`).join("\n") });
   }
   card.addFields(
-    { name: "🪙 Dark Coins", value: `+${p.reward.toLocaleString("en-US")}`, inline: true },
+    { name: "🪙 Doolar", value: `+${p.reward.toLocaleString("en-US")}`, inline: true },
     { name: "✨ Hunting XP", value: `+${p.xp.toLocaleString("en-US")}`, inline: true },
     { name: "🔥 Streak", value: `${p.streak} / 50`, inline: true },
   );
@@ -369,7 +369,7 @@ function commandCards(output) {
   if (part || !pages.length) pages.push(part || "Nothing here yet.");
   return pages.map((description, i) => ({
     content: "", embeds: [embed(title, description).setColor(color)
-      .setFooter({ text: `Neox • ${pages.length > 1 ? `Part ${i + 1}/${pages.length} • ` : ""}Dark Coins are virtual` })],
+      .setFooter({ text: `Neox • ${pages.length > 1 ? `Part ${i + 1}/${pages.length} • ` : ""}Doolar are virtual` })],
     allowedMentions,
   }));
 }

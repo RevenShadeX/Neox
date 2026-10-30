@@ -152,7 +152,7 @@ test("actual prefix transport authorizes the server owner and immediately uses t
   f.tick();
   client.emit(Events.MessageCreate, msg("#balance"));
   await flush();
-  assert.match(sent[1].content, /Dark Coins/);
+  assert.match(sent[1].content, /Doolar/);
   f.tick();
   client.emit(Events.MessageCreate, msg("n balance"));
   await flush();

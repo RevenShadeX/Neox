@@ -16,7 +16,7 @@ const commands = {
   deposit: {
     aliases: ["dep"],
     usage: "amount|all",
-    description: "Move Dark Coins into your bank",
+    description: "Move Doolar into your bank",
   },
   withdraw: {
     aliases: ["with"],
@@ -25,7 +25,7 @@ const commands = {
   },
   pay: {
     usage: "@user amount",
-    description: "Send Dark Coins to another player with confirmation",
+    description: "Send Doolar to another player with confirmation",
   },
   weekly: { description: "Claim weekly item supplies" },
   work: { description: "Work for companion supplies" },
@@ -51,7 +51,7 @@ const commands = {
   },
   hunt: {
     aliases: ["h"],
-    description: "Hunt monsters and earn Dark Coins and XP",
+    description: "Hunt monsters and earn Doolar and XP",
   },
   zoo: {
     aliases: ["monsters"],
@@ -64,12 +64,12 @@ const commands = {
     description: "Monster catalogue and probabilities",
   },
   sacrifice: { aliases: ["sc", "nsc"], usage: "monster-id|all|rarity [quantity]", description: "Sacrifice duplicate monsters for Rift Essence" },
-  repair: { usage: "gear-id|all", description: "Restore damaged equipment using Dark Coins" },
+  repair: { usage: "gear-id|all", description: "Restore damaged equipment using Doolar" },
   infuse: { usage: "armor-gear-id [essence]", description: "Use Rift Essence to increase armor defense (max +200)" },
   sellanimals: {
     aliases: ["release", "sellmonsters"],
     usage: "monster-id|all|rarity [quantity]",
-    description: "Sell monsters for Dark Coins; all or rarity preserves one of each",
+    description: "Sell monsters for Doolar; all or rarity preserves one of each",
   },
   huntstats: { description: "Hunting progression" },
   collection: {
@@ -120,7 +120,7 @@ const commands = {
   },
   trade: {
     usage: "@user gear-id price",
-    description: "Offer equipment for Dark Coins (10 minutes)",
+    description: "Offer equipment for Doolar (10 minutes)",
   },
   trades: { description: "Your incoming and outgoing offers" },
   accept: { usage: "trade-id", description: "Accept an equipment offer" },

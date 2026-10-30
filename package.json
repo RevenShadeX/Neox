@@ -2,7 +2,7 @@
   "name": "neox",
   "version": "1.0.0",
   "private": true,
-  "description": "Neox — a persistent Discord collection and dark coin game",
+  "description": "Neox — a persistent Discord collection and Doolar game",
   "main": "src/index.js",
   "type": "commonjs",
   "engines": {

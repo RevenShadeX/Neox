@@ -208,7 +208,7 @@ class ProfileRenderer {
         c.fillRect(215, 137, width, 4);
       }
       text(
-        `Dark Coins: ${profile.wallet.toLocaleString("en-US")}`,
+        `Doolar: ${profile.wallet.toLocaleString("en-US")}`,
         215,
         194,
         21,
@@ -243,7 +243,7 @@ class ProfileRenderer {
       );
       if (profile.pendingRewards)
         text(
-          `Pending level rewards: ${profile.pendingRewards.toLocaleString("en-US")} Dark Coins`,
+          `Pending level rewards: ${profile.pendingRewards.toLocaleString("en-US")} Doolar`,
           215,
           285,
           11,

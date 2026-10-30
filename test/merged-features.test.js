@@ -60,7 +60,7 @@ test("failed repair preserves condition and balances atomically", (t) => {
   const f = fixture(t), id = f.game.giveGear(A, "armor1");
   f.game.sql("INSERT INTO gear_condition(gear,condition) VALUES(?,0)").run(id);
   f.game.sql("UPDATE players SET wallet=0 WHERE id=?").run(A);
-  assert.throws(() => f.run("repair", [String(id)]), /enough Dark Coins/);
+  assert.throws(() => f.run("repair", [String(id)]), /enough Doolar/);
   assert.equal(f.game.sql("SELECT condition FROM gear_condition WHERE gear=?").get(id).condition, 0);
 });
 test("high durability gems activate with bonuses and consume exactly one use per hunt", (t) => {

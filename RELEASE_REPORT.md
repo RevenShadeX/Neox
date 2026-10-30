@@ -154,3 +154,8 @@ Role listing modals now accept required price plus optional duration and emoji. 
 Additive option/expiry tables preserve existing schemas and data. Expiry begins at confirmed delivery and is stored independently of purchase-history retention. A leased, bounded worker checks due jobs every five seconds, inspects current membership/ownership, removes only the purchased role and retries outages/permission failures. Permanent roles have no expiry jobs; existing owned roles cannot be purchased. Active expiry jobs block repurchase to avoid stale removals affecting a new grant. Deleted listings and pruned history do not lose existing obligations. Shutdown guards prevent late callbacks from touching a closed database.
 
 Validation: 892 tests passed, covering actual Discord modal submission and fresh server-emoji lookup, form defaults, duration/emoji validation, stale confirmation rollback, purchase snapshots, permanent grants, expiry removal, concurrent polling, retry behavior, absent roles, shutdown safety and restart recovery after history cleanup. Expiry visibility in rolepurchases and help were also updated.
+
+
+## Currency renamed to Doolar
+
+Current currency display name is Doolar. Updated command descriptions, balances, rewards, gambling, profile rendering, hunting cards, role shops, payment/trade confirmations, error messages and current README wording. Prices previously abbreviated dc now show Doolar. Existing database balances, item IDs, rules acceptance, emoji environment keys and committed coin artwork filenames remain compatible; no data conversion is required. Historical release notes above retain their original terminology.

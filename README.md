@@ -1,6 +1,6 @@
 # Neox — Wispbyte release candidate
 
-Neox is an original dark-fantasy Discord game using **Dark Coins**. They are virtual, cannot be bought, have no cash value, and cannot be redeemed or traded for real money. One Node.js 24 application and one persistent SQLite database serve every Discord server. Player balances, inventories, XP, companions and agreements are global.
+Neox is an original dark-fantasy Discord game using **Doolar**. They are virtual, cannot be bought, have no cash value, and cannot be redeemed or traded for real money. One Node.js 24 application and one persistent SQLite database serve every Discord server. Player balances, inventories, XP, companions and agreements are global.
 
 ## Install and run
 
@@ -69,9 +69,9 @@ Prefix and slash commands use the same services. Canonical names are registered 
 | duel | @user amount / random amount / accept / decline / cancel | Challenge a server member to a fair dice duel |
 | help | [command\|category] | Categorized guide, aliases, syntax and examples |
 | cash (balance, bal, wallet) | — | Wallet and bank |
-| deposit (dep) | amount / all | Move Dark Coins into your bank |
+| deposit (dep) | amount / all | Move Doolar into your bank |
 | withdraw (with) | amount / all | Withdraw banked coins |
-| pay | @user amount | Confirm a transfer of existing Dark Coins |
+| pay | @user amount | Confirm a transfer of existing Doolar |
 | weekly | — | Claim weekly item supplies |
 | work | — | Work for companion supplies |
 | treasury | [fund amount] | View or fund the legacy treasury (not needed for gambling) |
@@ -83,7 +83,7 @@ Prefix and slash commands use the same services. Canonical names are registered 
 | history | [page] | Recent wallet transactions |
 | economy | — | Global economy totals |
 | leaderboard (lb, top) | [wealth / hunt / battle / xp] [page] | Global player rankings |
-| hunt (h) | — | Hunt monsters and earn Dark Coins and XP |
+| hunt (h) | — | Hunt monsters and earn Doolar and XP |
 | zoo (monsters) | [page] | Your monster collection |
 | animals (bestiary) | [page / monster-id] | Monster catalogue and probabilities |
 | sellanimals (release, sellmonsters) | monster-id / all / rarity [quantity] | Sell monsters; bulk selection keeps one per species |
@@ -108,7 +108,7 @@ Prefix and slash commands use the same services. Canonical names are registered 
 | pet | [monster-id] | Select a collected monster companion |
 | feed | [quantity] | Train your companion with food |
 | battle | [@user] | Fight an expedition or a ranked rival |
-| trade | @user gear-id price | Offer equipment for Dark Coins (10 minutes) |
+| trade | @user gear-id price | Offer equipment for Doolar (10 minutes) |
 | trades | — | Your incoming and outgoing offers |
 | accept | trade-id | Accept an equipment offer |
 | cancel | trade-id | Cancel your outgoing offer |
@@ -265,7 +265,7 @@ The reviewed release includes confirmed player payments, endless Rift stages, ba
 
 - `sacrifice monster-id [quantity]`, `sacrifice rarity`, or `sacrifice all` converts monsters to Rift Essence. Bulk selections keep one of each species.
 - `infuse armor-id [amount]` consumes essence for permanent defense, up to +200 per armor piece.
-- Equipped gear loses 1–4 condition points per fight. At zero condition it retains half its base/upgrade/enhancement stats. `repair gear-id` or `repair all` charges Dark Coins and restores condition to 100; infusions are preserved.
+- Equipped gear loses 1–4 condition points per fight. At zero condition it retains half its base/upgrade/enhancement stats. `repair gear-id` or `repair all` charges Doolar and restores condition to 100; infusions are preserved.
 - Gem drops can have `-50`, `-100`, `-500`, or `-1000` use suffixes. Activate the full gem ID. These variants have a 30-day activation window, still limited by remaining hunts and one active gem per category.
 - `help battle` explains stages, ranked sparring, equipment, repairs and infusions in an embed using the current server prefix.
 
@@ -281,7 +281,7 @@ Repeated prefix attempts in the same channel reuse the active notice. Cleanup ta
 
 ### Hunt cards and accepted player battles
 
-`hunt` / `/hunt` now send an embed card with rarity-grouped monsters, copy counts and IDs, exact Dark Coins/hunting XP, streak, hunting level, global XP and active bonuses. Accent color follows the rarest encounter, and the next-hunt timestamp reflects the cooldown. Hunt results stay visible; temporary cooldown notices still clear automatically.
+`hunt` / `/hunt` now send an embed card with rarity-grouped monsters, copy counts and IDs, exact Doolar/hunting XP, streak, hunting level, global XP and active bonuses. Accent color follows the rarest encounter, and the next-hunt timestamp reflects the cooldown. Hunt results stay visible; temporary cooldown notices still clear automatically.
 
 `battle @member` / `/battle args:@member` opens an invitation with **Accept Battle** and **Decline** buttons. Only that member in the same server can respond, within two minutes. Both players must have accepted Neox rules and still be server members at acceptance. Invitations grant no progression, cause no equipment wear and do not start combat cooldowns. Challenger cooldowns are checked before sending and again when combat begins. Acceptance runs the existing ranked equipment combat once, updates the invitation to its result, and removes its buttons. Decline/expiry causes no combat. Invitations survive restarts in the existing expiring UI table. Ordinary PvE `battle` and `boss` continue immediately. Dice `duel` invitations retain their existing acceptance buttons.
 
@@ -290,7 +290,7 @@ Repeated prefix attempts in the same channel reuse the active notice. Cleanup ta
 
 Use your server prefix with `roleshopadmin`, or `/roleshopadmin`. Choose **Add Role** (or **Edit Listing** for an existing role). The form has three fields:
 
-- **Price in Dark Coins** — required.
+- **Price in Doolar** — required.
 - **Duration** — optional: `30m`, `2h`, `7d`, `4w` or up to `365d`. Seconds (`30s`) work for testing. Blank, `0` or `permanent` means no automatic removal.
 - **Emoji** — optional: one Unicode emoji such as 👑, or an accessible server/application emoji pasted as `<:name:ID>` / `<a:name:ID>` (its ID also works). Blank uses the default role tag.
 

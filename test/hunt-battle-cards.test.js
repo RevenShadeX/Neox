@@ -27,7 +27,7 @@ test("hunt card retains species IDs, rarity groups, exact rewards, streak and se
   assert.match(card.embeds[0].title, /Hunt Complete/);
   const fields = card.embeds[0].fields;
   for (const { animal } of p.found) assert.ok(fields.some((field) => field.value.includes(animal.id) && field.value.includes(animal.name)));
-  assert.equal(fields.find((field) => field.name.includes("Dark Coins")).value, `+${p.reward}`);
+  assert.equal(fields.find((field) => field.name.includes("Doolar")).value, `+${p.reward}`);
   assert.equal(fields.find((field) => field.name.includes("Hunting XP")).value, `+${p.xp}`);
   assert.ok(fields.length <= 25 && fields.every((field) => field.value.length <= 1024));
   assert.deepEqual(card.allowedMentions.parse, []);

@@ -343,7 +343,7 @@ test("prefix matching is literal and honors multi-character and server settings"
     assert.equal(f.message("zHUNT").content.includes("HUNT COMPLETE"), true);
     assert.equal(f.game.getPrefix("66666"), "n");
     f.run("prefix", ["$."]);
-    assert.equal(f.message("$.BALANCE").content.includes("Dark Coins"), true);
+    assert.equal(f.message("$.BALANCE").content.includes("Doolar"), true);
     assert.equal(parsePrefix("$.cashier", "$."), null);
     assert.equal(parsePrefix("n hunt", ""), null);
     assert.equal(parsePrefix(null), null);
@@ -557,7 +557,7 @@ test("animation changes GIF to the committed skull/crown result without rerollin
       assert.match(calls[1].content, outcome ? /HEADS!/ : /TAILS!/);
       assert.deepEqual(calls[1].attachments, []);
       assert.equal(f.game.player(A).wallet, wallet);
-      assert.match(calls[1].content, /Dark Coins/);
+      assert.match(calls[1].content, /Doolar/);
     } finally {
       f.close();
     }

@@ -579,7 +579,7 @@ function createClient(
   });
   client.once(Events.ClientReady, () => {
     console.log(
-      `Neox online as ${client.user.tag}; ${Object.keys(commands).length} commands. Dark Coins: virtual only.`,
+      `Neox online as ${client.user.tag}; ${Object.keys(commands).length} commands. Doolar: virtual only.`,
     );
     const tick = () => {
       if (client.isReady())

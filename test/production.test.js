@@ -133,7 +133,7 @@ test("global rules consent is required, persists across servers, and decline rel
   f.click(s, "agree");
   assert.equal(
     f.run("cash", [], A, { guildId: H }).content,
-    "🪙 **Dark Coins**\n👛 Wallet: **0**\n🏦 Bank: **0**",
+    "🪙 **Doolar**\n👛 Wallet: **0**\n🏦 Bank: **0**",
   );
   f.run("decline");
   assert.throws(
@@ -1295,7 +1295,7 @@ test("global-shop component purchase failures are acknowledged and leave no part
   client.emit(Events.InteractionCreate, i);
   await flush();
   assert.equal(calls[0][0], "deferUpdate");
-  assert.match(calls[1][1].content, /enough Dark Coins/);
+  assert.match(calls[1][1].content, /enough Doolar/);
   assert.equal(f.g.qty(A, "food", "food"), 0);
 });
 test("role-shop Discord purchase validation is owner-bound and invokes durable recovery", async (t) => {

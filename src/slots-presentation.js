@@ -16,7 +16,7 @@ function payload(result, emojis, spinning = false) {
   const line = p.reels.map((r) => symbol(r, emojis)).join("  ");
   const net = p.payout - p.wager;
   return {
-    content: `🎰 **NEOX • RIFT SLOTS**\n\n${line}\n\n${p.multiplier === 10 ? "🏆 JACKPOT! 10×" : p.multiplier === 1 ? "✨ PAIR • Stake returned" : "💀 NO MATCH"}\n${coin} Wager: **${p.wager.toLocaleString("en-US")}**\n${coin} Payout: **${p.payout.toLocaleString("en-US")}**\nNet: **${net >= 0 ? "+" : ""}${net.toLocaleString("en-US")} Dark Coins**\n\n*216 equally likely outcomes • RTP 69.44%*\nWinnings are settled before the animation begins.`,
+    content: `🎰 **NEOX • RIFT SLOTS**\n\n${line}\n\n${p.multiplier === 10 ? "🏆 JACKPOT! 10×" : p.multiplier === 1 ? "✨ PAIR • Stake returned" : "💀 NO MATCH"}\n${coin} Wager: **${p.wager.toLocaleString("en-US")}**\n${coin} Payout: **${p.payout.toLocaleString("en-US")}**\nNet: **${net >= 0 ? "+" : ""}${net.toLocaleString("en-US")} Doolar**\n\n*216 equally likely outcomes • RTP 69.44%*\nWinnings are settled before the animation begins.`,
     allowedMentions,
   };
 }
