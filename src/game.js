@@ -1150,7 +1150,10 @@ class Game {
               : 0;
           return { reels, multiplier };
         });
-        return `${settled.reels.map((r) => ["🌑", "🔮", "🦇", "💎", "⚔️", "👑"][r]).join(" ")}\nReturned ${fmt(settled.payout)} Dark Coins; net ${fmt(settled.payout - wager)}. 216 equiprobable outcomes: triple 6/216 pays 10×; pair 90/216 returns 1×; other 120/216 pays 0. RTP 69.44%. Winnings paid directly by Neox.`;
+        return {
+          content: `${settled.reels.map((r) => ["🌑", "🔮", "🦇", "💎", "⚔️", "👑"][r]).join(" ")}\nReturned ${fmt(settled.payout)} Dark Coins; net ${fmt(settled.payout - wager)}. 216 equiprobable outcomes: triple 6/216 pays 10×; pair 90/216 returns 1×; other 120/216 pays 0. RTP 69.44%. Winnings paid directly by Neox.`,
+          presentation: { kind: "slots", wager, reels: settled.reels, payout: settled.payout, multiplier: settled.multiplier },
+        };
       }
       case "prefix": {
         assert(ctx.guildId, "Use this in a server.");
