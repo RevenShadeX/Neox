@@ -810,8 +810,8 @@ class Game {
           }
         }
         assert(opened > 0, "No boxes to open.");
-        this.money(id, coins, "loot boxes");
-        return `Opened ${opened} boxes • +${coins} Dark Coins\n${[...rewards].map(([s, q]) => `${s} ×${q}`).join("\n")}`;
+        // Loot boxes grant items only; currency creation is restricted.
+        return `Opened ${opened} boxes • monster and item rewards\n${[...rewards].map(([s, q]) => `${s} ×${q}`).join("\n")}`;
       }
       case "pet": {
         if (a[0]) {
@@ -886,7 +886,7 @@ class Game {
         }
         const won = hp > 0 && (ehp <= 0 || hp > ehp),
           draw = hp > 0 && hp === ehp;
-        const reward = boss ? (won ? 800 : 80) : draw ? 30 : won ? 160 : 40;
+        const reward = 0;
         // Battles grant progression only; no new Dark Coins.
         this.sql(
           "UPDATE players SET battles_total=battles_total+1 WHERE id=?",
@@ -912,7 +912,7 @@ class Game {
             enemyId,
           );
         }
-        return `${enemy ? `Ranked spar against <@${enemyId}>` : boss ? "Boss battle against the Sovereign of the Rift" : "Expedition against a Rift Sentinel"}\n${log.join("\n")}\n${draw ? "Draw" : won ? "Victory" : "Defeat"} • +${reward} Dark Coins • ${won ? 35 : 15} hunting XP\nRanked sparring uses saved equipment; no opponent coins are taken.`;
+        return `${enemy ? `Ranked spar against <@${enemyId}>` : boss ? "Boss battle against the Sovereign of the Rift" : "Expedition against a Rift Sentinel"}\n${log.join("\n")}\n${draw ? "Draw" : won ? "Victory" : "Defeat"} • +0 Dark Coins • ${won ? 35 : 15} hunting XP\nRanked sparring uses saved equipment; no opponent coins are taken.`;
       }
       case "trade": {
         assert(a.length === 3, "Usage: trade @user gear-id price");
