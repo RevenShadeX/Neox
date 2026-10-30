@@ -415,6 +415,10 @@ class Game {
           : this.duels.create(ctx, userId(a[0]), wager);
       }
       case "help":
+        if (a[0] === "battle") {
+          const prefix = this.getPrefix(ctx.guildId);
+          return `**NEOX • BATTLE GUIDE**\n\n**PvE Expedition**\n\`${prefix} battle\` — Fight your current endless Rift stage. Win to advance; losing keeps your stage.\n\n**Friend PvP**\n\`${prefix} battle @user\` — Fight a player who has started Neox. Currently automatic; acceptance buttons are not yet available.\n\n**Boss Fight**\n\`${prefix} boss\` — Challenge the Sovereign of the Rift.\n\n**Equipment**\n\`${prefix} inventory\` — View items by rarity.\n\`${prefix} equip gear-id\` — Equip a weapon, armor or accessory.\n\`${prefix} equipment\` — Check combat stats.\n\`${prefix} upgrade gear-id\` / \`${prefix} enhance gear-id\` — Strengthen equipment.\n\`${prefix} pet monster-id\` — Select a companion.\n\n**Combat rules**\nEquipment, companion bonuses, critical strikes and defense affect automatic battles. Stages 10, 20, ... are bosses; every 50th is elite. No wager or opponent coin transfer.\n\n**Hunting**\n\`${prefix} hunt\` is manual only, with a 20-second cooldown. Use \`${prefix} gems\` and \`${prefix} activate gem-id\` for limited-use hunting bonuses.`;
+        }
         return guide(this.getPrefix(ctx.guildId), a[0]);
       case "cash":
         return `🪙 **Dark Coins**\n👛 Wallet: **${fmt(p.wallet)}**\n🏦 Bank: **${fmt(p.bank)}**`;
