@@ -57,7 +57,7 @@ Every wager checks the wallet, integer bounds and treasury **before sampling ran
 
 First use presents an owner-bound rules embed with **Accept Rules** and **Decline** buttons. Acceptance is global and persists across servers/restarts. Decline locks gameplay and cancels active dice requests. Typed `agree` / `decline` remain available. Modals and buttons recheck acceptance, ownership, guild, expiry and permissions. A user who declines can still claim money already owed through `refunds`.
 
-Default prefix is `n`, case-insensitive; attached and separated forms both work: `N Hunt`, `nhunt`, `Ncoinflip 100 HEADS`. Extra whitespace is ignored. Multi-word aliases use longest exact-token matching. Ordinary words such as `nice`, `never`, `NHUNTING` and `ncf100` are ignored. Existing saved prefixes and explicit `DEFAULT_PREFIX` overrides remain unchanged. Prefix changes require Manage Server. Names and game keyword/item arguments are case-insensitive; configured prefix spelling is preserved.
+Default prefix is `n`, case-insensitive; attached and separated forms both work: `N Hunt`, `nhunt`, `Ncoinflip 100 HEADS`. Extra whitespace is ignored. Multi-word aliases use longest exact-token matching. Ordinary words such as `nice`, `never`, `NHUNTING` and `ncf100` are ignored. Existing saved prefixes and explicit `DEFAULT_PREFIX` overrides remain unchanged. Server owners, Administrators and members with Manage Server can change only their server’s prefix, using `/prefix args:!` or the currently configured prefix, for example `n prefix !`. The new prefix applies immediately and survives restarts. Prefixes may use 1–16 non-space characters, including symbols or emoji, but not invisible/control characters. Slash commands remain available if a prefix is forgotten. Names and game keyword/item arguments are case-insensitive; configured prefix spelling is preserved.
 
 Prefix and slash commands use the same services. Canonical names are registered as slash commands, with an optional `args` field for the same arguments. Aliases do not duplicate slash registrations. Each message selects at most one handler. Successful Discord IDs are persisted for 24 hours; component state makes repeated confirmations safe even with distinct interaction IDs.
 
@@ -134,7 +134,9 @@ Panels are stored in SQLite, bound to owner and server, expire after ten minutes
 
 ## Server role shops and recovery
 
-`n roleshopadmin` opens server-only management with buttons, role/listing selects and price modals. Managers need **Manage Server and Manage Roles**, or Administrator; listing a role additionally checks the manager's own role authority and the bot's hierarchy. Every management interaction rechecks permission. Shops begin disabled; managers can add/edit/remove listings, view pages, and enable/disable them. At most 100 listings per guild.
+`n roleshopadmin` opens server-only management with buttons, role/listing selects and price modals. Server owners and Administrators can manage listings; other managers need **Manage Server and Manage Roles**; listing a role additionally checks the manager's own role authority and the bot's hierarchy. Every management interaction rechecks permission. Shops begin disabled; managers can add/edit/remove listings, view pages, and enable/disable them. At most 100 listings per guild.
+
+Use the server’s actual configured prefix for these commands: after `n prefix !`, use `!roleshopadmin` to add/price/enable roles and `!roleshop` for members to buy. `/roleshopadmin` and `/roleshop` also work independently of prefix settings.
 
 `n roleshop` lets a player select and confirm a role from the current server only. Before charging, Neox checks current role existence, buyer membership, bot Manage Roles, unmanaged/assignable status, bot hierarchy, current price and whether the buyer already has the role. Roles cannot be sold using another server's listing or another player's panel.
 

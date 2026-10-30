@@ -19,9 +19,9 @@ Branch: `audit/global-stability-storage`; PR: #1. Main is not merged.
 ## Executed verification
 
 - `npm ci --no-audit --no-fund`: passed.
-- `npm test`: **762 passed, 0 failed, 0 skipped/cancelled**.
+- `npm test`: **773 passed, 0 failed, 0 skipped/cancelled**.
 - `npm run check`: passed actual game smoke flow.
-- `npm run syntax`: **41 JavaScript files passed**.
+- `npm run syntax`: **44 JavaScript files passed**.
 - `npm run storage`: **91.94 MiB** selected project storage, below 1 GiB budget.
 - `npm audit --omit=dev --audit-level=moderate`: **0 vulnerabilities**.
 - `git diff --check`: passed.
@@ -69,3 +69,9 @@ No live Discord server or Wispbyte account was used. Live token, role permission
 - `test/game.test.js`
 - `test/production.test.js`
 - `test/progression.test.js`
+
+## Server configuration follow-up
+
+Explicit owner/Administrator authorization is shared by prefix, slash and component routes. Each server retains its own chosen prefix; 1–16 non-space symbols/letters/emoji are supported, and changing one server does not affect another. Prefix startup and command validation share the same rules. Added integration coverage proves an owner can change the prefix and a normal member can purchase that server’s listed role through automatic bot assignment. Current verification: 773 tests passed, 0 failed; 44 JavaScript syntax checks and gameplay smoke check passed.
+
+Additional files: `src/permissions.js`, `src/prefix.js`, `test/server-settings.test.js`; integration changes in `src/discord.js`, `src/game.js`, `src/runtime.js`, and README.

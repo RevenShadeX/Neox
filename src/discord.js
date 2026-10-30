@@ -8,6 +8,7 @@ const {
   Events,
 } = require("discord.js");
 const { GameError, userId, number } = require("./game");
+const { serverPermissions } = require("./permissions");
 const { commands, registry } = require("./commands");
 const { parsePrefix, parseArguments } = require("./parser");
 const { presentCoinflip, levelUpPayload } = require("./presentation");
@@ -115,12 +116,7 @@ function createClient(
       (interaction ? s.user : s.author).globalName ||
       (interaction ? s.user : s.author).username,
     guildId: s.guildId,
-    manageGuild: interaction
-      ? !!s.memberPermissions?.has(PermissionFlagsBits.ManageGuild)
-      : !!s.member?.permissions?.has(PermissionFlagsBits.ManageGuild),
-    manageRoles: interaction
-      ? !!s.memberPermissions?.has(PermissionFlagsBits.ManageRoles)
-      : !!s.member?.permissions?.has(PermissionFlagsBits.ManageRoles),
+    ...serverPermissions(s, interaction),
     requestId: s.id,
   });
   const emojiContext = (s) =>

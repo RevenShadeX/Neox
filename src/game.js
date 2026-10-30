@@ -1,5 +1,6 @@
 "use strict";
 const C = require("./content");
+const { validPrefix } = require("./prefix");
 const secure = require("./random");
 const { MAX } = require("./database");
 const { GameError, assert } = require("./errors");
@@ -1144,8 +1145,8 @@ class Game {
         assert(ctx.guildId, "Use this in a server.");
         assert(ctx.manageGuild, "Manage Server permission is required.");
         assert(
-          a.length === 1 && /^[A-Za-z0-9!?$%.~_-]{1,8}$/.test(a[0]),
-          "Prefix must be 1–8 letters, numbers or !?$%.~_-",
+          a.length === 1 && validPrefix(a[0]),
+          "Prefix must be 1–16 non-space characters without invisible/control characters.",
         );
         this.sql(
           "INSERT INTO guilds(id,prefix) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET prefix=excluded.prefix",

@@ -1,5 +1,6 @@
 "use strict";
 const path = require("node:path");
+const { validPrefix } = require("./prefix");
 const { open } = require("./database");
 const { Game } = require("./game");
 const { createClient } = require("./discord");
@@ -14,8 +15,10 @@ function runtimeConfig(env = process.env, nodeVersion = process.versions.node) {
       "DISCORD_TOKEN is missing. Configure it securely in Wispbyte or an ignored .env file.",
     );
   const prefix = env.DEFAULT_PREFIX || "n";
-  if (!/^[A-Za-z0-9!?$%.~_-]{1,8}$/.test(prefix))
-    throw Error("DEFAULT_PREFIX must be 1–8 supported characters.");
+  if (!validPrefix(prefix))
+    throw Error(
+      "DEFAULT_PREFIX must be 1–16 non-space characters without invisible/control characters.",
+    );
   if (env.DATABASE_PATH === ":memory:")
     throw Error("Production requires a persistent SQLite file, not :memory:.");
   const seconds = Number(env.MAINTENANCE_INTERVAL_SECONDS || 300);
