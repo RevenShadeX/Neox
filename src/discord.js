@@ -163,6 +163,13 @@ function createClient(
       game.getPrefix(message.guildId),
     );
     if (!parsed) return;
+    if (registry.resolve(parsed.command) === "duel" && parsed.args.length === 2) {
+      const target = parsed.args[0].replace(/[^0-9]/g,"");
+      if (!message.guild.members.cache.has(target)) {
+        try { await message.guild.members.fetch(target); }
+        catch { await message.channel.send("That player must be in this server."); return; }
+      }
+    }
     if (registry.resolve(parsed.command) === "shop" && parsed.args.length === 0) {
       await message.channel.send(shopPanel(message.author.id));
       return;
@@ -183,6 +190,7 @@ function createClient(
         manageGuild:
           message.member?.permissions?.has(PermissionFlagsBits.ManageGuild) ||
           false,
+        targetGuildMember: true,
         requestId: message.id,
       });
     } catch (err) {
