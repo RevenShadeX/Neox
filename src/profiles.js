@@ -34,15 +34,15 @@ class BoundedCache {
 function background() {
   const canvas = createCanvas(900, 300),
     c = canvas.getContext("2d");
-  c.fillStyle = "#12121b";
+  c.fillStyle = "#0b0b0f";
   c.fillRect(0, 0, 900, 300);
   const g = c.createLinearGradient(0, 0, 900, 300);
-  g.addColorStop(0, "#2c1742");
-  g.addColorStop(0.5, "#16151f");
-  g.addColorStop(1, "#221431");
+  g.addColorStop(0, "#240c12");
+  g.addColorStop(0.5, "#111014");
+  g.addColorStop(1, "#1a0b10");
   c.fillStyle = g;
   c.fillRect(0, 0, 900, 300);
-  c.strokeStyle = "#49305c";
+  c.strokeStyle = "#48212a";
   c.lineWidth = 1;
   for (let i = 0; i < 6; i++) {
     c.beginPath();
@@ -50,10 +50,10 @@ function background() {
     c.lineTo(420 + i * 45, 300);
     c.stroke();
   }
-  c.fillStyle = "#bd85ff";
+  c.fillStyle = "#b91c32";
   c.fillRect(0, 0, 900, 4);
   c.fillRect(0, 296, 900, 4);
-  c.fillStyle = "#b98cf1";
+  c.fillStyle = "#e04455";
   c.font = "bold 16px NeoxSans";
   c.fillText("N E O X  /  PROFILE", 30, 35);
   return canvas;
@@ -157,20 +157,20 @@ class ProfileRenderer {
       c.clip();
       if (avatar) c.drawImage(avatar, 32, 81, 152, 152);
       else {
-        c.fillStyle = "#38224f";
+        c.fillStyle = "#32131b";
         c.fillRect(32, 81, 152, 152);
         c.font = "bold 54px NeoxSans";
-        c.fillStyle = "#e2c7ff";
+        c.fillStyle = "#ffe1e5";
         c.textAlign = "center";
         c.fillText([...name][0] || "N", 108, 176);
       }
       c.restore();
-      c.strokeStyle = "#ae73e6";
+      c.strokeStyle = "#b91c32";
       c.lineWidth = 3;
       c.beginPath();
       c.arc(108, 157, 78, 0, Math.PI * 2);
       c.stroke();
-      const text = (value, x, y, size = 16, color = "#dedbe6") => {
+      const text = (value, x, y, size = 16, color = "#e3dde0") => {
         c.fillStyle = color;
         c.font = `${size}px NeoxSans`;
         c.fillText(value, x, y);
@@ -179,9 +179,9 @@ class ProfileRenderer {
       let label = name;
       while (c.measureText(label).width > 490 && label.length > 1)
         label = label.slice(0, -2) + "…";
-      c.fillStyle = "#f3eaff";
+      c.fillStyle = "#fff1f2";
       c.fillText(label, 215, 78);
-      text(`LEVEL ${profile.level}`, 740, 35, 18, "#d9acff");
+      text(`LEVEL ${profile.level}`, 740, 35, 18, "#f2a4ae");
       text(
         `${profile.current.toLocaleString("en-US")} / ${profile.required.toLocaleString("en-US")} XP`,
         215,
@@ -193,15 +193,15 @@ class ProfileRenderer {
         650,
         118,
         14,
-        "#bc9ed7",
+        "#bda4a9",
       );
-      c.fillStyle = "#30283e";
+      c.fillStyle = "#332025";
       c.fillRect(215, 137, 645, 18);
       const width = 645 * Math.max(0, Math.min(1, profile.percent / 100));
       if (width > 0) {
         const glow = c.createLinearGradient(215, 0, 860, 0);
-        glow.addColorStop(0, "#7732b1");
-        glow.addColorStop(1, "#d491ff");
+        glow.addColorStop(0, "#861529");
+        glow.addColorStop(1, "#e04455");
         c.fillStyle = glow;
         c.fillRect(215, 137, width, 18);
         c.fillStyle = "rgba(255,255,255,.22)";
@@ -212,14 +212,14 @@ class ProfileRenderer {
         215,
         194,
         21,
-        "#eddaff",
+        "#fff0f1",
       );
       text(
         `Bank: ${profile.bank.toLocaleString("en-US")}`,
         605,
         194,
         16,
-        "#bcaec8",
+        "#bfaeb1",
       );
       text(
         `Global Rank: #${profile.rank.toLocaleString("en-US")}`,
@@ -232,14 +232,14 @@ class ProfileRenderer {
         510,
         226,
         16,
-        "#bfa8d7",
+        "#cda8af",
       );
       text(
         `Hunts: ${profile.hunts.toLocaleString("en-US")}   |   Battles: ${profile.battles.toLocaleString("en-US")}   |   Coinflip wins: ${profile.coinflipWins.toLocaleString("en-US")}`,
         215,
         263,
         14,
-        "#bbb0ca",
+        "#b9a9ad",
       );
       if (profile.pendingRewards)
         text(
@@ -247,7 +247,7 @@ class ProfileRenderer {
           215,
           285,
           11,
-          "#c28aea",
+          "#e47786",
         );
       return await canvas.encode("png");
     } finally {

@@ -1,111 +1,92 @@
-# Neox
+# Neox — Wispbyte release candidate
 
-An original Discord collection and economy game. The currency is **Dark Coins**: virtual, non-purchasable, non-transferable outside the game, and never redeemable for money or prizes. No real-money purchases or paid loot boxes exist.
+Neox is an original dark-fantasy Discord game using **Dark Coins**. They are virtual, cannot be bought, have no cash value, and cannot be redeemed or traded for real money. One Node.js 24 application and one persistent SQLite database serve every Discord server. Player balances, inventories, XP, companions and agreements are global.
 
-One Node.js process hosts Discord connections and a persistent SQLite database. Player identity is the Discord user ID: wallets, animals, equipment, pets, cooldowns and rankings are shared across every server.
+## Install and run
 
-## Run
-
-Requires Node.js **24 LTS** (22.12+ also supported), npm, a writable persistent directory, and outbound Discord REST and Gateway access. Dependencies are locked in `package-lock.json`. If a native SQLite prebuild is unavailable, installation needs Python 3, `make` and a C++ compiler.
+Requires **Node.js 24 LTS**, npm, persistent writable storage, and outbound Discord HTTPS/WSS access. Keep optional npm platform packages enabled: `better-sqlite3` and `@napi-rs/canvas` use native prebuilt binaries. If prebuilds are unavailable, Python 3, make and a C++ toolchain are needed. No Redis, SQL server, HTTP server, port listener or second process is required.
 
 ```sh
-cd /workspace/Neox
 npm ci --no-audit --no-fund
-test -e .env || cp .env.example .env
-chmod 600 .env
-```
-
-In the [Discord Developer Portal](https://discord.com/developers/applications), create an application named **Neox**, add its bot, enable the **Message Content Intent**, and invite it with the `bot` and `applications.commands` scopes. Give it View Channels, Send Messages and Send Messages in Threads where wanted. Animated Dark Coinflip and profile images additionally use Attach Files; level-up announcements use Embed Links. Missing image permissions fall back to text. Custom emojis from another server require Use External Emojis and an emoji accessible to the bot. Administrator and Manage Server are not required for the bot. Prefix users need Manage Server only to change their server prefix. Slash prefix management defaults to that same permission and is checked at execution too. Message Content requires Discord approval once your application reaches the applicable verification threshold.
-
-Set `DISCORD_TOKEN` privately in your host's secret manager or `.env`, and `DISCORD_CLIENT_ID` to the application ID. Never post the token in chat or commit it. Use a **real local token**: a proxy substitution placeholder cannot authenticate the Gateway's WebSocket Identify payload. The application never prints token values. Optional `DISCORD_GUILD_ID` restricts registration to one test server for instant iteration. Omit it for global commands (Discord propagation can take time). Registration replaces this application's command list for the selected scope; run it after adding/changing commands. Do not register in both scopes unless duplicate commands are intended.
-
-```sh
 npm test
 npm run check
+npm run syntax
+test -e .env || cp .env.example .env
+chmod 600 .env
+# Configure your private token and application ID securely.
 npm run register
 npm start
 ```
 
-`npm start` deliberately exits with a clear error when the token is missing. Network login and registration require actual credentials; local tests do not. No registration is attempted automatically at every restart. Use one supervised process, for example your host's restart policy with a 5-second retry delay. SIGINT/SIGTERM closes Discord and checkpoints SQLite. Mount `DATABASE_PATH` on persistent storage; the default is `./data/neox.sqlite`, relative to the process working directory. Do not run replicas on separate copies of the database.
+Entry point: `src/index.js`. Create an application named **Neox** in the Discord Developer Portal. Enable **Message Content Intent** for prefix commands. Invite the bot with `bot` and `applications.commands` scopes. Give it View Channels and Send Messages; Attach Files enables profile/coin images; Embed Links enables panels and announcements. Use External Emojis is optional. Role shops additionally require the bot's **Manage Roles** permission and the bot's highest role above every role sold. No Administrator permission is required by the bot. Particular-member REST fetches are used instead of downloading entire member lists.
 
-If an HTTP proxy is mandatory, the host must provide a supported route for **both** HTTPS REST requests and long-lived WSS connections. discord.js does not automatically route every transport through `HTTPS_PROXY`. This build is verified locally without a Gateway session; cloud proxy-only connectivity must be configured and verified before claiming it is online. Required hosts include `discord.com`, `gateway.discord.gg`, Discord's assigned/resume Gateway hosts under `*.discord.gg`, and `cdn.discordapp.com` / `media.discordapp.net` for profile avatars. Coin artwork, the profile background and font are local; only Discord avatars require a public image download.
+Never commit `.env`, tokens, credentials, databases, sidecars, backups or `node_modules`. `.env.example` contains names and safe defaults only. The Discord token must be a real local bot token, not a network-proxy placeholder, because Gateway identification happens inside the WebSocket. Do not paste tokens into chat.
 
-## Universal command parser
+## Wispbyte deployment
 
-The default prefix is **`n`**, case-insensitive. `DEFAULT_PREFIX` remains an explicit fallback override, and existing saved per-server prefixes are preserved unchanged; no database migration or prefix reset occurs. Use `n prefix !` (Manage Server) to configure a server. A server saved with `z` continues using `z` until changed. Prefix values retain their stored spelling, but matching ignores case.
+1. Select Wispbyte's **Node.js 24** runtime. Set the working directory to the uploaded project root. Upload `package.json`, `package-lock.json`, `src/`, `scripts/`, `assets/` (including `assets/fonts/` and its license), `.env.example`, and README. `.nvmrc` pins Node 24. Upload `test/` and `test-support/` too if running tests on the host. Tests are not imported by the production application. Do not upload your local `node_modules` or private `.env` into a public repository.
+2. Install with `npm ci --no-audit --no-fund`. Configure private environment variables in Wispbyte or an ignored `.env`. `DISCORD_TOKEN` is required for startup; `DISCORD_CLIENT_ID` is needed for slash registration. Leave `DISCORD_GUILD_ID` empty for global registration, or use one development server for instant test registration. Registration replaces this application's commands in the selected scope; it does not run on every restart.
+3. Set `DATABASE_PATH=./data/neox.sqlite` on Wispbyte's **persistent** storage. Keep the entire directory and SQLite `-wal` / `-shm` sidecars. Do not use `/tmp` or `:memory:`. Do not delete or replace `data/` on uploads. Run **one** application instance against this database; never run replicas on independently copied databases.
+4. Before upgrading existing data, create and download a consistent backup with `node scripts/backup.js /persistent/backup/neox-before-upgrade.sqlite`. The backup reader is read-only and **does not migrate the source**. Use a new filename; existing backups are never overwritten. Move backups off the 1 GB hosting volume. Stop the bot before restoring, preserve the current database set, replace the DB with the backup, and remove only stale sidecars associated with the replaced database before restarting.
+5. Run `npm run register`, then configure the startup command as **`npm start`**. Enable the panel's restart-on-failure policy with a short delay. SIGTERM/SIGINT stops recovery work, closes Discord/HTTP, checkpoints SQLite and closes the database. Startup/configuration/login failures exit nonzero; logs never print tokens. The bot needs outbound connectivity, not an inbound web port.
+6. In Discord, use `n rules` and **Accept Rules**, then `n daily`, `n hunt`, `n shop`, `n cf`, `/profile`, and `n duel @member 10`. Test role-shop setup with a harmless role below the bot and an authorized administrator before selling meaningful server roles. Verify successful grants, a failure/refund path, and recovery after a restart.
 
-All **44 original commands, plus the new profile/progression commands,** use the same centralized registry in `src/commands.js`. `src/parser.js` resolves attached or separated prefixes, ignores leading/trailing/repeated whitespace, matches complete alias tokens, and chooses the longest registered multi-word alias. `nice`, `never`, `NHUNTING`, `ncf100 h`, and `ncoinflipx 100 h` are ignored. `ncoinflip 100 h` is explicitly registered and accepted. Aliases that normalize to the same name cause a startup error instead of silently replacing another handler. A message resolves to at most one handler; commands cannot be chained in one message.
+Discord connectivity needs `discord.com`, `gateway.discord.gg` and assigned/resume `*.discord.gg` hosts. Avatars need `cdn.discordapp.com` / `media.discordapp.net`. Avatar requests honor HTTPS/HTTP proxy configuration and normal CA verification; Discord's Gateway also needs a supported long-lived WSS route. This cloud workspace's earlier avatar request received proxy CONNECT 403; local tests use mocks or local images. Live Discord/Wispbyte behavior requires your own token, server permissions and allowed network route. No live deployment is claimed by offline validation.
 
-| Shared handler | Prefix names and aliases |
-| --- | --- |
-| Coinflip (`cf`) | `cf`, `coinflip`, `coin flip`, `flip` |
-| Balance (`cash`) | `cash`, `balance`, `bal`, `wallet` |
-| Hunt | `hunt`, `h` |
-| Inventory | `inventory`, `inv`, `i` |
-| Daily | `daily`, `d` |
-| Leaderboard | `leaderboard`, `lb`, `top` |
+For a 512 MB host, optionally set `NODE_OPTIONS=--max-old-space-size=192` to leave space for native images and SQLite. Monitor actual host memory/quota; synthetic benchmarks do not guarantee production throughput. `npm run storage` is read-only and warns at 70% of a 1 GiB budget; it never deletes user data.
 
-All existing aliases are retained, including `dep`, `with`, and `eq`. Command names and game keywords/item IDs are case-insensitive, so `N COIN FLIP 100 HEADS`, `ncf 100 h`, `Ncoinflip 100 tails`, `NDAILY`, `nwallet`, and `N INVENTORY` work. The value passed to `prefix` is preserved exactly. Multi-word help works: `n help coin flip`. All 44 original canonical slash names remain unchanged (for example `/cash` and `/cf`), with the same services, normalization, validation, balances, cooldowns, and request deduplication as prefix commands. Alias expansion does not create duplicate slash registrations.
+## Economy and funding policy
 
-### Animated Dark Coinflip
+**Daily rewards, monster hunting, global level-up rewards and casino winnings create coins.** Minting is centrally scoped and transaction-guarded. New accounts start with **zero** coins; existing balances are preserved. Daily pays 1,200 coins and a daily cache every 24 hours. Hunting rewards depend on rarity, with a 20-second cooldown. Global level rewards use the configured curve below.
 
-```text
-N cf 100 h
-ncf 100 T
-N COINFLIP 100 HEADS
-n coin flip 100 tails
-nflip all heads
-n cf half t
-```
+Weekly gives two gem caches, work gives three Companion Rations, quests grant XP, battles/bosses grant progression, and collection milestones grant item caches. Releasing monsters, disposing of equipment and opening loot caches give **no direct currency**. Monster threat/value scores are collection metadata, not redemption prices. `pay` remains a compatibility command that explicitly rejects gifting. Equipment trades transfer existing coins for equipment. Own-wallet bank deposits/withdrawals remain available.
 
-`h` / `heads` and `t` / `tails` choose the side. Numeric wagers must be positive whole numbers within your wallet and the configured cap. `all` wagers `min(wallet, MAX_BET)`. `half` wagers `min(floor(wallet / 2), MAX_BET)`. The bank is excluded; a zero computed wager is rejected. `MAX_BET` defaults to `100000`, also caps slots, and must be an integer from 1 through 1 trillion. Set it in your private runtime environment or `.env`. Invalid amounts, sides, extra arguments and insufficient funds produce no balance, cooldown, or reward changes.
+### Bot-paid gambling
 
-The original artwork in `assets/` shows **HEADS — a dark silver skull** and **TAILS — a black crown with purple accents**. Prefix and slash replies share the local looping spin GIF, followed after approximately 2 seconds by an edit revealing the side and net win/loss in the same compact normal message. No external asset host is used; the small artwork buffers are loaded once and reused across replies. The 160×160 rotating GIF is an attachment, not a large embed; final results are text. The actual Discord server display name (or global display name/username) appears in both stages. `scripts/generate-coin.py` is an optional artwork authoring tool requiring Pillow; Python/Pillow are **not runtime dependencies**.
+Neox pays casino winnings directly. Coinflip, dice and slots never require, debit or credit the global treasury or another player's balance. Existing treasury records and the legacy contribution command remain available for compatibility; contributions are not needed to gamble.
 
-The production outcome uses `crypto.randomInt(2)` for 50/50 odds. A win pays 2× wager including the stake; a loss pays 0. Stake, payout, cooldown and Discord request ID commit atomically **before** presentation awaits any network response. A failed animation falls back to the already-settled text result, never retries the game service, and never rerolls the coin. Successful message IDs stay deduplicated across restarts for the existing 24-hour retention window. The current bet cap and wallet limit are checked inside the same transaction.
+Every wager checks the player's balance, bet limit and wallet capacity for the maximum payout before sampling randomness or deducting coins. Outcomes remain fair and independent of balances. Net casino winnings are audited as newly issued coins; net losses as consumed coins.
 
-## First adventure
+- Coinflip: `n cf 100 heads`, `ncf half t`, `n coin flip all h`, or `n cf` for Heads/Tails buttons and a wager modal. Fair `crypto.randomInt(2)` outcome; a win returns 2× stake, a loss 0. Compact messages use the actual display name and original spinning coin artwork, then edit the result after roughly two seconds. Configured emojis or Unicode/text fallbacks work without reaction menus.
+- Dice: `n dice 100 high` or `n dice half low`. One fair six-sided die; high is 4–6, low 1–3, each 50%. Win returns 2× stake, loss 0.
+- Slots: `n slots 100`. Six independent equiprobable symbols on each reel: triple 6/216 pays 10×, exactly one pair 90/216 returns 1×, otherwise 120/216 returns 0. RTP 69.44%.
 
-Commands accept `n hunt`, `nhunt`, `N Hunt`, and `NHUNT`. The server prefix is configurable. Slash equivalents use the **same handler and arguments**, entered in their optional `args` text field; for example `/cf args:100 h`, `/pay args:@user 100`, or `/buy args:sword1`. User arguments accept a Discord mention or numeric user ID. Canonical names are slash commands; aliases work for prefixes.
+`all` means `min(wallet, MAX_BET)`; `half` means `min(floor(wallet/2), MAX_BET)` where supported. Slots accepts numeric wagers. Default maximum bet is 100,000; bets must be positive whole affordable amounts. Games share a five-second cooldown. Stake, payout, audit history and processed Discord ID commit in a single `BEGIN IMMEDIATE` transaction. Neox issues the coins needed for winning payouts. Coins held in role escrow/refund credits are not available for gambling.
 
-```text
-n daily
-n hunt
-n zoo
-n collection
-n collection claim
-n shop
-n buy sword1
-n equip 1
-n open daily
-n pet a001
-n buy food 2
-n feed 2
-n battle
-n huntstats
-```
+## Rules, parser and commands
 
-Use the actual gear ID reported by purchase/inventory, and an animal you actually own for your pet. Inventory gear IDs (`1`) differ from catalogue equipment IDs (`sword1`). `n help command` explains syntax. Mention formatting never triggers notification pings. The bot ignores messages from bots, DMs, and message events more than a minute old.
+First use presents an owner-bound rules embed with **Accept Rules** and **Decline** buttons. Acceptance is global and persists across servers/restarts. Decline locks gameplay and cancels active dice requests. Typed `agree` / `decline` remain available. Modals and buttons recheck acceptance, ownership, guild, expiry and permissions. A user who declines can still claim money already owed through `refunds`.
 
-## Commands
+Default prefix is `n`, case-insensitive; attached and separated forms both work: `N Hunt`, `nhunt`, `Ncoinflip 100 HEADS`. Extra whitespace is ignored. Multi-word aliases use longest exact-token matching. Ordinary words such as `nice`, `never`, `NHUNTING` and `ncf100` are ignored. Existing saved prefixes and explicit `DEFAULT_PREFIX` overrides remain unchanged. Server owners, Administrators and members with Manage Server can change only their server’s prefix, using `/prefix args:!` or the currently configured prefix, for example `n prefix !`. The new prefix applies immediately and survives restarts. Prefixes may use 1–16 non-space characters, including symbols or emoji, but not invisible/control characters. Slash commands remain available if a prefix is forgotten. Names and game keyword/item arguments are case-insensitive; configured prefix spelling is preserved.
 
-| Command | Arguments | Purpose |
+Prefix and slash commands use the same services. Canonical names are registered as slash commands, with an optional `args` field for the same arguments. Aliases do not duplicate slash registrations. Each message selects at most one handler. Successful Discord IDs are persisted for 24 hours; component state makes repeated confirmations safe even with distinct interaction IDs.
+
+| Command (prefix aliases) | Arguments | Purpose |
 | --- | --- | --- |
-| help | [command] | Command guide |
+| rules | — | Read Neox game rules and currency policy |
+| agree | — | Accept the game rules to start playing |
+| decline | — | Decline game rules and keep gameplay locked |
+| duel | @user amount / random amount / accept / decline / cancel | Challenge a server member to a fair dice duel |
+| help | [command\|category] | Categorized guide, aliases, syntax and examples |
 | cash (balance, bal, wallet) | — | Wallet and bank |
 | deposit (dep) | amount / all | Move Dark Coins into your bank |
 | withdraw (with) | amount / all | Withdraw banked coins |
-| pay | @user amount | Send Dark Coins |
+| pay | @user amount | Direct currency gifting is disabled |
+| weekly | — | Claim weekly item supplies |
+| work | — | Work for companion supplies |
+| treasury | [fund amount] | View or fund the legacy treasury (not needed for gambling) |
+| roleshop | — | Open this server role shop |
+| roleshopadmin | — | Manage this server role shop (Manage Server) |
+| rolepurchases | — | Your recent role purchase and recovery statuses |
+| refunds | — | Claim role-purchase refunds held for wallet space |
 | daily (d) | — | Claim your daily reward |
-| weekly | — | Claim your weekly reward |
-| work | — | Earn Dark Coins |
 | history | [page] | Recent wallet transactions |
 | economy | — | Global economy totals |
 | leaderboard (lb, top) | [wealth / hunt / battle / xp] [page] | Global player rankings |
-| hunt (h) | — | Find animals and earn XP |
-| zoo | [page] | Your collected animals |
-| animals | [page / animal-id] | Animal catalogue and probabilities |
-| sellanimals | animal-id / all [quantity] | Sell animals; all keeps one of each |
+| hunt (h) | — | Hunt monsters and earn Dark Coins and XP |
+| zoo (monsters) | [page] | Your monster collection |
+| animals (bestiary) | [page / monster-id] | Monster catalogue and probabilities |
+| sellanimals (release, sellmonsters) | monster-id / all [quantity] | Release duplicate monsters; no Dark Coin reward |
 | huntstats | — | Hunting progression |
 | collection | [claim] | Discover species and claim milestones |
 | inventory (inv, i) | [page] | Items and equipment |
@@ -118,21 +99,22 @@ Use the actual gear ID reported by purchase/inventory, and an animal you actuall
 | equip | gear-id | Equip owned gear |
 | unequip | weapon / armor / accessory | Remove equipment |
 | compare | gear-id gear-id | Compare two owned items |
-| shop | [page] | Browse boxes, gems and equipment |
+| shop (sh) | [page] | Browse boxes, gems and equipment |
 | buy | item-id [quantity] | Purchase items |
 | sell | gear-id | Sell unequipped equipment |
 | boxes | — | Box inventory |
 | open | box-id / all [quantity / all] | Open up to 50 boxes |
 | boxinfo | box-id | Published reward probabilities |
-| pet | [animal-id] | Select a collected animal companion |
+| pet | [monster-id] | Select a collected monster companion |
 | feed | [quantity] | Train your companion with food |
 | battle | [@user] | Fight an expedition or a ranked rival |
 | trade | @user gear-id price | Offer equipment for Dark Coins (10 minutes) |
 | trades | — | Your incoming and outgoing offers |
 | accept | trade-id | Accept an equipment offer |
 | cancel | trade-id | Cancel your outgoing offer |
-| cf (coinflip, coin flip, flip) | amount / all / half h / t / heads / tails | 50/50 coin flip; 2× total payout |
+| cf (coinflip, coin flip, flip) | [amount / all / half h / t / heads / tails] | 50/50 coin flip; 2× total payout |
 | slots | amount | Spin three reels |
+| dice (highlow) | amount / all / half high / low | Guess a six-sided dice roll: high 4–6 or low 1–3 |
 | prefix | new-prefix | Set server prefix (Manage Server) |
 | profile | [@user] | Global profile card and progression |
 | level | [@user] | Global level and XP card |
@@ -144,143 +126,114 @@ Use the actual gear ID reported by purchase/inventory, and an animal you actuall
 | boss | — | Challenge the Sovereign of the Rift |
 | event | — | Current global hunting event |
 
-## Global XP, levels and profile cards
+## Global item shop
 
-The bot now has **52 canonical slash commands**. All original commands, alias behavior, currencies, inventory and hunting/combat progression remain. New commands:
+`n shop`, `n sh`, and `/shop` open real Discord components: four category buttons (**Gems, Equipment, Loot boxes, Consumables**), paginated item dropdowns, information panels, quantity modals, confirmation/cancel buttons, and explicit success/failure messages. Equipment pages include all 42 templates; the shop is not truncated to the first 25 items. Prices/quantities are validated at confirmation, and costs fund the treasury. Mythic equipment is deliberately expensive; actual prices are shown in the shop and defined in `src/content.js`.
 
-| Command | Behavior |
-| --- | --- |
-| `n profile [@user]`, `nprofile` | 900×300 global profile PNG with the real Discord avatar |
-| `n level [@user]`, `nlevel` | Same card and accurate level progress |
-| `n rank [@user]`, `nrank` | Same profile service and global XP rank |
-| `/profile`, `/level`, `/rank` | Actual slash counterparts, using optional `args` for a user mention/ID |
-| `n levels [page]`, `n leveltop`, `n xptop` | Paginated global XP rankings with names, levels and total XP |
-| `n leaderboard xp [page]` | Same indexed global XP ranking |
-| `n levelannouncements on\|off` | Manage Server: toggle public announcements for this server |
-| `n levelrewards` | Collect pending level rewards when the wallet has room |
-| `n quest`, `n quest claim hunt\|cf\|battle\|all` | View/claim real daily gameplay quests |
-| `n boss` | A scaling, 160-HP Sovereign of the Rift encounter; 10-minute cooldown |
+Panels are stored in SQLite, bound to owner and server, expire after ten minutes and carry revision numbers. Opening a replacement panel invalidates the old one. Purchases consume the session once and atomically validate wallet/stock limits, debit, and deliver. Invalid quantities, stale prices, full inventory or any failure roll back everything. At most 50 stackable items or ten equipment instances may be bought per action; gear inventory caps at 200. `buy item-id [quantity]` is the same purchase service for typed workflows.
 
-Canonical commands each have slash versions. `leveltop`, `xptop` and `quests` are prefix aliases. Profile/level/rank share a ten-second per-player cooldown. Viewing someone else requires their existing global game account; it does not create an account or change their progress. The image shows level, XP within the current level, next-level requirement, exact percentage, wallet, bank, global XP rank, hunts, battles and coinflip wins. Missing avatars show an original monogram instead. The text summary is retained for accessibility and image-delivery failure.
+## Server role shops and recovery
 
-### XP and currency math
+`n roleshopadmin` opens server-only management with buttons, role/listing selects and price modals. Server owners and Administrators can manage listings; other managers need **Manage Server and Manage Roles**; listing a role additionally checks the manager's own role authority and the bot's hierarchy. Every management interaction rechecks permission. Shops begin disabled; managers can add/edit/remove listings, view pages, and enable/disable them. At most 100 listings per guild.
 
-Global XP is cumulative integer XP, separate from the original hunting XP:
+Use the server’s actual configured prefix for these commands: after `n prefix !`, use `!roleshopadmin` to add/price/enable roles and `!roleshop` for members to buy. `/roleshopadmin` and `/roleshop` also work independently of prefix settings.
 
-```text
-nextRequirement(currentLevel) = round(LEVEL_XP_BASE × LEVEL_XP_GROWTH^(currentLevel - 1))
-levelThreshold(level) = sum(nextRequirement(i), i = 1 .. level - 1)
-progressXP = totalGlobalXP - levelThreshold(currentLevel)
-progressPercent = 100 × progressXP / nextRequirement(currentLevel)
-levelReward(newLevel) = round(LEVEL_REWARD_BASE × LEVEL_REWARD_GROWTH^(newLevel - 2))
-```
+`n roleshop` lets a player select and confirm a role from the current server only. Before charging, Neox checks current role existence, buyer membership, bot Manage Roles, unmanaged/assignable status, bot hierarchy, current price and whether the buyer already has the role. Roles cannot be sold using another server's listing or another player's panel.
 
-Defaults are XP base **20,000**, XP growth **1.15**, coin base **10,000**, and coin growth **1.10**. Exact decimal-rational calculations ensure that 30,417.5 rounds to 30,418. The first requirements are 20,000 / 23,000 / 26,450 / 30,418 / 34,980 XP; cumulative level starts are 0 / 20,000 / 43,000 / 69,450 / 99,868. First level-up rewards are 10,000 / 11,000 / 12,100 / 13,310 / 14,641 Dark Coins. Every crossed level is included in one atomic payout. For level 5, 15,000 / 34,980 XP displays **42.88%**.
+Payment is placed in **persistent escrow**, not immediately consumed. A unique purchase request and active buyer/server/role constraint prevent duplicate charges. A leased worker performs an idempotent single-role Discord PUT. Confirmed delivery consumes the escrowed coins; role-shop purchases do not mint coins. Deleted/unassignable roles, departed members and verified definitive failures refund the escrow exactly once. If a timeout might have delivered the role, Neox does **not** blindly refund: it checks authoritative membership on recovery, observes an already-granted role, or safely retries the idempotent grant. Uncertain jobs remain durable across restarts and are polled with backoff, at most two concurrently.
 
-`global_xp` is capped at 1 trillion and guarded by SQLite integer constraints. Level is derived from XP, so no stored level can drift from the curve. At the cap, the card labels `XP CAP`; the next full threshold may be unreachable. The default cap permits reaching level 114. Formula configuration is validated at startup, including rejecting reward curves whose cumulative supported rewards exceed the currency cap. Growth accepts 1.01–3 with up to six decimal places. Rewards are tracked with a persistent highest rewarded level, not a volatile process flag.
+Full wallets do not lose refunds: the remainder stays in `refund_credits`; spend/bank coins then use `n refunds`. `n rolepurchases` shows recent status. Pending/uncertain payments are never pruned by maintenance. External Discord outages can delay fulfillment or reconciliation; they cannot justify inventing funds or replaying a charge. The bot cannot prevent administrators from independently removing a successfully delivered role later.
 
-Gameplay completion, XP, source cooldown, highest rewarded level, currency payout and processed Discord ID share a single SQLite transaction. Invalid commands, insufficient balances, failed transactions, cancelled trade offers, duplicate requests and merely viewing cards award no XP. The original hunting XP, hunting level, gem effects and combat stats are retained unchanged; their XP text describes hunting XP, not global XP. Work, slots and trading do not award global XP.
+## Dice duels and matchmaking
 
-| Completed action | Default global XP | Additional XP cooldown |
-| --- | ---: | --- |
-| Coinflip, either outcome | 2 | 60 seconds across every server; wagers still use the existing 5-second game cooldown |
-| Battle | 2 | 60 seconds |
-| Hunt | 2 | 20 seconds |
-| Daily claim | 5 | No extra cooldown; existing 24-hour claim lock applies |
-| Weekly claim | 10 | No extra cooldown; existing seven-day claim lock applies |
-| Each claimed quest | 10 | No extra cooldown; each daily quest can be claimed once |
-| Completed boss fight | 5 | 600 seconds |
+`n duel @user amount` creates a two-minute, server-scoped challenge with Accept/Decline buttons. Both parties must be current non-bot server members and have accepted rules. The command is the challenger's consent; only the opponent can accept/decline. No wager is debited before acceptance. Membership, both balances and winner capacity are checked again. Both roll independent secure six-sided dice; the higher roll gains the loser's wager, ties move nothing. Settlement, stored rolls, closure and balance transfer are atomic and idempotent.
 
-XP-source cooldowns suppress XP only; they do not cancel otherwise valid games or change their payouts. All defaults are configurable through `XP_REWARD_COINFLIP`, `XP_REWARD_BATTLE`, `XP_REWARD_HUNT`, `XP_REWARD_DAILY`, `XP_REWARD_WEEKLY`, `XP_REWARD_QUEST`, and `XP_REWARD_BOSS`. Set a reward to zero to disable that source. Rewards accept 0–1,000,000. Corresponding `XP_COOLDOWN_<SOURCE>_SECONDS` settings accept 0–86,400; `.env.example` lists every setting. Curve settings are `LEVEL_XP_BASE`, `LEVEL_XP_GROWTH`, `LEVEL_REWARD_BASE`, and `LEVEL_REWARD_GROWTH`. Restart after configuration changes. Changing a curve preserves total XP and never repays previously rewarded level numbers, but can change the level derived from that XP.
+`n duel random amount` persists a same-server, exact-wager matchmaking request. A compatible match presents a challenge requiring **both** players to accept explicitly. Queue entry alone never charges coins. `n duel cancel` or Cancel Search withdraws a request. Players cannot self-match or hold multiple active duels/queues across servers. Requests expire after two minutes and are cleaned safely. Decline, expiry, cancellation and failed acceptance never move coins.
 
-Wallet overflow never discards a level reward: available room is credited, and the rest persists in `pending_level_coins`. Pending coins pay automatically on a later XP-eligible completion with wallet room, or with `levelrewards` after spending/banking coins. A dark-purple **NEOX — LEVEL UP** announcement shows the old/new level, reward, wallet and any pending coins. `levelannouncements off` suppresses public announcements only; XP and rewards still settle globally. Announcement delivery is best effort, with one send attempt and no automatic retry; a network failure can lose the announcement but cannot duplicate the reward. Successful Discord request deduplication also prevents repeated level-up sends.
+## Monsters, equipment and progression
 
-### Daily quests and bosses
+The 200-entry original bestiary uses eight rarity tiers and five dark-fantasy forms (Shadow Wolf, Abyss Wraith, Cursed Knight, Infernal Beast, Void Stalker) across five habitats. Names, rarity, collection/companion displays and cache loot are monster-themed. Persisted `a001`–`a200` IDs, `animal` inventory kind and discovery/pet references stay compatible; old `animals`, `zoo` and `sellanimals` command names remain aliases/entry points. `bestiary`, `monsters`, `release` and `sellmonsters` are available. `monster` is accepted as an input alias for the stored `animal` cache ID.
 
-Three original quests reset at 00:00 UTC: **Trail of Echoes** (three hunts, 300 coins), **Faces of Fate** (three completed coinflips, 200 coins), and **Hold the Rift** (two completed battles, 400 coins). Boss encounters count toward the battle quest. `quest claim all` grants XP for each newly claimed quest, not just once for the command. Completed valid games progress quests even when their XP-source cooldown suppresses XP. Only completed, unclaimed quests pay; claims and their XP/coin rewards commit atomically. Old quest rows expire after seven days without touching player progress. Boss victories pay 800 coins and defeats pay 80, in addition to configured global XP; legacy battle/hunting progression is preserved.
+Base rarity weights total one million: Common 60%, Uncommon 25%, Rare 10%, Epic 3.5%, Legendary 1.1%, Mythic 0.3%, Divine 0.09%, Secret 0.01%. Eligible within-tier monsters are uniform except a UTC-day migration doubles one habitat's relative weight. Lucky/event/fortune bonuses multiply rare weights before normalization; probabilities never exceed the normalized whole. Hunting streaks cap at 50, continue within five minutes, and boost hunting XP. Discoveries survive release; releasing `all` retains one copy of each monster.
 
-### Safe upgrade and resource use
+Five gem categories × three tiers retain durations/remaining uses and one active gem per category. Hunting gems add draws, lucky/event affect rarity weights, XP/currency gems affect hunting rewards. Tier upgrades consume three previous-tier gems plus a coin cost. Seven equipment types × six rarities retain attack, defense, abilities, crafting, equipping, upgrades through level 10 and enhancement through +5. All costs consume existing wallet coins into the treasury. Only unequipped/unoffered gear can be sold/disposed or offered in a ten-minute targeted equipment trade. Pets retain existing bonds/XP, and Companion Rations train them. Battle/boss XP, ranking and combat remain; direct battle currency rewards are removed.
 
-Schema version 2 is an additive, transactional migration. It copies existing hunting XP once into `global_xp` while retaining the original `xp` column unchanged. Imported levels establish the already-rewarded baseline, so migration does not alter existing balances or mint retroactive rewards. Inventories, gear, prefixes, pets, ratings and all existing statistics remain. Battle counts start from the existing wins + losses, then count all new completed battles including draws/bosses. Coinflip totals/wins begin tracking on upgrade because the original schema did not persist these statistics; historical counts are not fabricated from a partial transaction log. Migration uses 250-row batches, is safe on repeated starts, rolls back on invalid legacy XP, and refuses newer schema versions. Back up your live database before deployment with the existing backup tool.
+Eight cache categories provide **items only**, with uniform 1–3 reward rolls, documented category/tier weights and type guarantees. `boxinfo` publishes probabilities. `open all` opens at most 50 per command. Overflow rolls back the batch. Legacy cached coin-range metadata is no longer advertised or paid. Rarity/equipment base values do not create sell proceeds.
 
-Profile PNGs are generated in memory and never stored by the bot. A shared background and bundled, licensed DejaVu font are reused; `@napi-rs/canvas` uses a native prebuilt renderer. Keep optional platform packages enabled during `npm ci`. Each rendered canvas releases its backing pixels after PNG encoding. At most two profile jobs run concurrently; bursts fall back to text rather than queueing unbounded render work. Avatars use only HTTPS Discord CDN hosts, a 256 KiB response cap, a 512×512 decoded-size cap, a 2.5-second timeout and no redirects. The bounded 64-entry avatar cache retains successful images for ten minutes and failures for 30 seconds. Identity metadata is bounded to 128 entries, with at most four pending API lookups. Names learned during gameplay are persisted for XP rankings; rankings use SQL `LIMIT/OFFSET` and the global-XP index, never loading all players. Avatar requests honor the inherited HTTPS/HTTP proxy and normal CA verification through Undici; no TLS checks are bypassed.
-
-### Custom Dark Coin emojis
-
-Optional numeric Discord IDs: `DARK_COIN_EMOJI_ID`, `HEADS_EMOJI_ID`, `TAILS_EMOJI_ID`, and `SPINNING_COIN_EMOJI_ID`. No guild-specific IDs are hardcoded. The bot observes configured emojis in its guild Gateway data and checks application-owned emojis once at readiness. Cross-server emojis are used only when available to the bot and Use External Emojis allows them. Missing/deleted/inaccessible emojis use 🪙 / 💀 / 👑. A usable custom spinning emoji replaces the GIF attachment; a missing GIF also falls back to text. Names are Markdown-escaped and allowed mentions are restricted to prevent user names from triggering unwanted pings.
-
-## Rules and progression
-
-**Economy.** New players start with 500 Dark Coins. Daily claims give 1,200 and a daily box every 24 hours; weekly claims give 8,000 and two gem boxes every seven days; work pays 150–450 every hour. These are elapsed-time cooldowns, not midnight resets. Wallet and bank each cap at 1 trillion integer Dark Coins. Payments move wallet coins, require an existing player as recipient, and require both sides to remain within caps. `deposit all` and `withdraw all` move the corresponding entire balance. Banked coins cannot fund wagers or purchases. No administrator mint command exists.
-
-**Hunting.** Two or three base animals per hunt, plus a draw per ten levels (up to three), hunting gem draws (1/2/3), and one for an equipped bow. Hunts cool down for 20 seconds. Hunting level is `1 + floor(sqrt(XP / 100))`. Species grant `15 + 10 × rarityIndex` XP and `10 + 6 × rarityIndex` Dark Coins. Streaks continue when the previous hunt was less than five minutes ago; they cap at 50 and add 0.5% XP per streak step, up to 25%. XP and currency bonuses round down only after summing the hunt's rewards. All animals are original combinations of eight aspects, five habitats and five species, with 25 unique species per rarity. Values, special cosmetic attributes, habitats and weights live in `src/content.js`.
-
-| Tier | Base tier chance per draw | Base sell value |
-| --- | ---: | ---: |
-| Common | 60% | 12 |
-| Uncommon | 25% | 30 |
-| Rare | 10% | 90 |
-| Epic | 3.5% | 300 |
-| Legendary | 1.1% | 1,200 |
-| Mythic | 0.3% | 5,000 |
-| Divine | 0.09% | 20,000 |
-| Secret | 0.01% | 100,000 |
-
-Individual base species odds divide tier chance by 25. Habitat/species add 0–12 to sell value. Lucky gems, event gems, and fortune accessories add their bonuses to **Rare and higher weights**, then all weights normalize together. They do not add percentage points to a probability. For example, lucky1 and event1 multiply rare weights by 1.2. One UTC-day migration doubles one habitat's within-tier weights; it does not change tier odds. `event` and `animals animal-id` describe the active rules. Discoveries persist after selling. `sellanimals all` retains one copy per owned species; explicit sales can sell the last copy. Collection milestones at 10/25/50/100/150/200 species pay 100 coins per milestone species plus an animal box, or a legendary box for milestones of 100+. Each milestone is claimable once.
-
-**Gems.** Five categories × three tiers, with 10%/20%/30% bonuses except hunting gems, which add 1/2/3 draws. Gems last 1/2/3 hours or 20/40/60 successful hunts, whichever expires first. One gem per category; different categories coexist. Active effects cannot be replaced. Every successful hunt consumes one use of every active category; failed hunts consume nothing. XP gems affect hunting XP, currency gems affect hunting coins, lucky/event gems affect rare hunting weights. They do not change wager or box odds. Tier 2/3 crafting and upgrading both consume three previous-tier gems plus `200 × target tier` coins; these are alternative recipe commands, not two sequential steps. Tier 1 gems come from the shop and boxes.
-
-**Equipment.** Seven types × six rarities, max level 10 and enhancement +5. Swords, bows, daggers, spears and staffs share the weapon slot; armor and accessories have their own slots. All gear is tradeable while unequipped and not in an active offer. No durability loss. Equipment templates specify attack, defense, price, rarity and ability. Per level beyond 1, gain +2 attack and +1 defense; each enhancement adds +3 attack and +2 defense. Upgrade costs one xp1 and `250 × (rarityIndex+1) × currentLevel` coins. Enhancement consumes `nextEnhancement` lucky1 gems and `500 × nextEnhancement` coins, with guaranteed success. Crafting costs 70% of the template's shop price and `max(1, rarityIndex)` currency1 gems. Sale returns 35% of base price plus 50 per extra level and 100 per enhancement. Inventories cap at 200 gear instances. Bow keen adds a hunt draw; accessory fortune adds 10% to rare weights; dagger critical gives a 20% double-damage roll; sword/spear force adds 3 damage; staff siphon heals 3 per attack; armor guard reduces incoming damage by 3.
-
-**Pets and combat.** Bond permanently with an owned animal; bonding does not consume it, and later sales do not remove the companion. Pet bonuses use rarity and pet XP; food gives 20 XP and battles give 5 pet XP. Pet levels are `1 + floor(sqrt(petXP / 20))`. Equip gear, then `battle` a scaling Rift Sentinel or `battle @player` for an asynchronous ranked spar against that player's saved loadout. Opponents need an existing Neox account; they do not lose coins or spend their own cooldown. One battle per minute, and one ranked spar against the same opponent per hour. Both sides start at 100 HP. Fights last at most 15 rounds; the initiator strikes first, damage is bounded 1–80, and remaining HP breaks timeout results (equal HP draws). Damage before abilities is `max(2, attack - floor(defense × 0.6) + random(-3, 5))`. Victory rewards 160 coins/35 XP, defeat 40/15 and a draw 30/15. Ranked decisive outcomes use Elo K=24 and update both participants' ratings, with a floor of zero. W/L counters track initiated fights. Battle, XP and wealth boards rank all servers together. Asynchronous sparring and first-strike advantage are explicit game rules; this is not a real-time challenge/consent battle system.
-
-**Trading.** `trade @buyer gear-id price` creates a ten-minute targeted offer, locking the item against equipment changes, selling, upgrades and other offers. A buyer must explicitly `accept trade-id`; ownership and the entire payment transfer together in a single transaction. Only the seller can cancel. At most 20 active offers per seller. There are no arbitrary item gifts or animal/gem trades: this trading system exchanges equipment for Dark Coins.
-
-**Boxes.** Eight categories: beginner, daily, weapon, armor, animal, gem, legendary and event. Shop costs range from 250 to 15,000 coins. Every box guarantees its listed coin range and 1–3 reward rolls; both are sampled uniformly. Category weights, tier weights, quantities and guarantees are published in `boxinfo box-id`. Gems use uniform categories with T1/T2/T3 odds of 75%/20%/5%, except legendary boxes guarantee T3. Animal/equipment draws normalize the box's eligible rarity weights, then choose uniformly within that tier and type. Weapon/armor boxes guarantee the named category. `open all` or `open box-id all` opens up to 50 boxes per command, preserving the rest. A capacity failure rolls back the entire batch, including consumed boxes, coins and all drops.
-
-**Gambling.** Wagers are 1–`MAX_BET` wallet Dark Coins (default 100,000), with a shared five-second cooldown. Coinflip is a fair crypto coin: 50% chance, 2× total payout including stake. Slots independently sample six equiprobable symbols on each of three reels: any triple pays 10× (6/216), exactly one pair returns 1× (90/216), and the rest pay nothing (120/216). Slots RTP is 69.44%. Coinflip odds are documented here and in command help; slots also publishes its odds in results. No real-world stake or redemption exists.
-
-## Integrity, operations and limits
-
-- `crypto.randomInt` provides secure random integers and weighted choices. There is no `Math.random` path or runtime deterministic seed. Test-only dependency injection allows known outcomes.
-- `BEGIN IMMEDIATE` transactions encompass cooldown checks, account changes, item quantities, trades, ledger entries and processed Discord IDs. An exception rolls back everything. Currency updates check integer bounds in application code and SQLite. No external network call occurs inside transactions. Sending a reply happens after commit: a Discord delivery failure does **not** undo a completed action; check inventory/history before retrying.
-- Each account has a persisted one-second successful-command cooldown. Prefix and slash IDs are deduplicated for 24 hours, across process restarts. Command-specific cooldowns are persistent; a failed command rolls back its cooldown. No HTTP admin API or owner economy bypass exists. Bot messages are ignored. This cannot prevent a person using multiple Discord accounts; server moderation remains necessary for alternate-account farming.
-- WAL mode, prepared statements, 4 MiB SQLite page cache, indexed rankings and owner lookups, bounded command batches, paginated results, no message cache, a 500-user cache and ten cached members per guild keep overhead low. Keep roles/guild/channel caches needed for Discord permission handling. A single synchronous SQLite writer suits a modest bot; long-running DB work blocks the event loop, so profile before scaling beyond thousands of active users.
-- Maintenance runs at startup and hourly: expired effects, cooldowns and offers are removed; processed IDs retain 24 hours; ledger history retains 30 days and at most the newest 100,000 entries after maintenance. Account, discovery and inventory progress is never pruned. WAL is checkpointed and its retained journal is limited to 8 MiB. Disk requirements still grow with players; monitor your hosting quota and keep backups off the bot's 1 GB volume.
-- Do not copy only a live `.sqlite` while ignoring its WAL. Use `node scripts/backup.js /backup/path/neox-YYYYMMDD.sqlite` for a consistent online SQLite backup. Existing backup files are never overwritten. Restore with the bot stopped; preserve the old database set first, remove stale WAL/SHM belonging to the replaced database, install the backup at `DATABASE_PATH`, then restart. Restoring rolls progression back to that backup. Restrict persistent directory access to the bot's operating-system user.
-
-## Verification and layout
-
-`npm test` runs the built-in Node test runner against disposable in-memory/on-disk databases, including real concurrent worker connections and mocked Discord event delivery. `npm run check` exercises a real random first-session loop without credentials. `node scripts/benchmark.js` creates and deletes a temporary 5,000-player database and runs 15,000 economy/hunt commands. A run in the setup environment measured **1.12 seconds, 6.60 MiB database, 124.71 MiB process RSS** with a constructed offline Discord client. `node scripts/benchmark-profiles.js` renders 100 cards without saving any files; a run measured 1.51 seconds, about 63 KiB per PNG, and 99.64 MiB peak renderer-process RSS. These are synthetic local measurements, not live gateway throughput or a guarantee under production traffic. Network login/registration and actual Discord image rendering must be verified separately with your application credentials. The current cloud proxy returned HTTP 403 for the public Discord avatar host; allowlist changes need review/application before live avatar retrieval can be verified. Fallback cards work without network access.
-
-The command regression suite executes every requested example and all registered aliases of all 52 commands, in lower/upper/mixed case and attached/separated forms, against the real game services. It also covers whitespace, longest matches, collision rejection, ordinary-word boundaries, saved prefixes, case-preserved settings, wager limits, all/half rounding, both payout outcomes, transaction rollback, duplicate requests, and mocked prefix/slash animation delivery and fallbacks.
+Global XP remains cumulative integer XP separate from legacy hunting XP. Defaults:
 
 ```text
-src/content.js     Original catalogue, tuning tables, loot configuration
-src/random.js      Cryptographic draws and integer-weight sampler
-src/database.js    Schema, constraints, indexes, retention and connection settings
-src/commands.js    Centralized aliases, collision detection, longest-match registry
-src/parser.js      Universal prefix parsing and shared argument tokenization
-src/config.js      Validated wager configuration
-src/game.js        Transactional game rules and shared execution services
-src/presentation.js Compact coinflip and level-announcement delivery
-src/leveling.js     Exact cumulative XP curve and atomic level rewards
-src/migrations.js   Additive versioned schema migrations
-src/profiles.js     Bounded in-memory native profile renderer and avatar cache
-src/profile-service.js Discord identity resolution and profile delivery
-src/emojis.js       Configured emoji availability and permission fallbacks
-src/quests.js       Daily completed-action quests
-src/http.js         Verified proxy-aware avatar transport
-src/discord.js     Prefix/slash adapters, permission checks, caches and response splitting
-src/index.js       Configuration, login, lifecycle and maintenance
-scripts/register.js  Explicit Discord slash registration
-scripts/check.js     Offline playable-flow smoke check
-scripts/backup.js    Consistent SQLite backup
-scripts/benchmark.js Synthetic resource measurement
-scripts/benchmark-profiles.js In-memory renderer resource measurement
-test/game.test.js   Economy, progression, concurrency and adapter regressions
-test/commands.test.js All requested forms and every command/alias/case/prefix combination
-test/progression.test.js Level/reward math, migrations, PNGs, XP/emoji/announcement regressions
+nextLevelXP = round(20000 × 1.15^(currentLevel−1))
+levelThreshold = sum(each rounded earlier nextLevelXP)
+levelReward = round(10000 × 1.10^(newLevel−2))
 ```
 
-Runtime settings: `DISCORD_TOKEN` (private, required), `DISCORD_CLIENT_ID` (registration), `DISCORD_GUILD_ID` (optional development registration), `DATABASE_PATH` (persistent file), `DEFAULT_PREFIX` (fallback prefix, default `n`), `MAX_BET` (wager cap, default 100000). Environment variables override `.env`. No external game service, Redis, database server, web server or additional process is required.
+Exact decimal-rational math yields first requirements 20,000 / 23,000 / 26,450 / 30,418 / 34,980 and rewards 10,000 / 11,000 / 12,100 / 13,310 / 14,641. Global XP caps at one trillion. Every crossed level is rewarded exactly once; wallet overflow remains pending for `levelrewards`. Card progress is within-level XP divided by that level's requirement (e.g. 15,000/34,980 = 42.88%). `/profile`, `/level`, `/rank` use the same in-memory 900×300 card, real avatar or monogram, global XP rank, balances and counters. `/levels` / `leaderboard xp` use indexed paginated SQL.
+
+Global XP defaults per completed action: coinflip 2, hunt 2, battle 2, daily 5, weekly 10, each quest 10, boss 5. Starting/cancelling panels, invalid actions, failed transactions or duplicate requests grant none. Source XP cooldowns are persistent; coinflip XP is limited to once per minute independently of its five-second game cooldown. Daily quests require three hunts, three coinflips or two battles (bosses count), reset at 00:00 UTC and grant XP, not coins. `levelannouncements off` (Manage Server) suppresses public announcements without changing rewards. Announcements are best-effort, at most once per completed request; failed network delivery never reverses or duplicates a settlement.
+
+## Configuration
+
+`.env.example` lists all settings. Existing private values are never overwritten by installation.
+
+- Required startup: `DISCORD_TOKEN`; registration: `DISCORD_CLIENT_ID`; optional development registration: `DISCORD_GUILD_ID`.
+- Runtime: `DATABASE_PATH=./data/neox.sqlite`, `DEFAULT_PREFIX=n`, `MAX_BET=100000`, `MAINTENANCE_INTERVAL_SECONDS=300` (30–3600).
+- Curve: `LEVEL_XP_BASE=20000`, `LEVEL_XP_GROWTH=1.15`, `LEVEL_REWARD_BASE=10000`, `LEVEL_REWARD_GROWTH=1.10`. Invalid/unsafe curves fail startup. Changing a curve preserves total XP and never repays already-rewarded level numbers.
+- XP: `XP_REWARD_COINFLIP`, `XP_REWARD_BATTLE`, `XP_REWARD_HUNT`, `XP_REWARD_DAILY`, `XP_REWARD_WEEKLY`, `XP_REWARD_QUEST`, `XP_REWARD_BOSS` and matching `XP_COOLDOWN_<SOURCE>_SECONDS`. Set reward 0 to disable. Limits: reward 0–1,000,000; cooldown 0–86,400 seconds.
+- Optional emoji IDs: `DARK_COIN_EMOJI_ID`, `HEADS_EMOJI_ID`, `TAILS_EMOJI_ID`, `SPINNING_COIN_EMOJI_ID`. Only available, permission-allowed emojis are used across servers; Unicode is the fallback. No guild-specific IDs are hardcoded.
+
+## Data compatibility, storage and verification
+
+Migration **v3** adds the empty treasury, bounded economy/wager history, versioned UI sessions, role settings/listings/purchases/refunds, and dice matches/presence/matchmaking. Existing balances, banks, inventories, discoveries, gear, XP, global rules and statistics are preserved. Old uncharged temporary dice challenges are expired during upgrade. v1/v2 upgrades are transactional/idempotent, and newer schema versions are refused rather than downgraded. Existing v1 XP is still imported once by v2 while preserving hunting XP and establishing the old-level reward baseline without retroactive currency.
+
+SQLite uses WAL with explicit `synchronous=FULL` durability, foreign keys, a busy timeout, 4 MiB page cache, indexed ownership/ranking/recovery lookups and short synchronous transactions. No network await occurs inside a DB transaction. Default cleanup runs every five minutes: expired sessions/queues/matches and temporary state are removed; histories retain 30 days and at most 100,000 entries; processed IDs retain 24 hours. Completed dice audit rows retain seven days and terminal role jobs 90 days. Unresolved role payments/refund credits and all permanent progression are preserved. Discord caches, avatar/identity caches and concurrent render/recovery work are bounded; generated cards are never stored on disk.
+
+```sh
+npm ci --no-audit --no-fund
+npm test
+npm run check
+npm run syntax
+npm run storage
+node scripts/benchmark.js
+node scripts/benchmark-profiles.js
+```
+
+Tests include real SQLite transactions and worker concurrency, old/new schemas, all aliases, rules gating, bot-paid settlements for every outcome, shop ownership/modals/rollback, duels and consent, role escrow/timeout/restart/refund recovery, native profile PNG generation and mocked Discord API/interaction failures. `test-support/legacy-game.cjs` seeds explicit grandfathered test fixtures; production never imports it. Final measured test counts and release SHA are in the PR/commit and release report. Offline tests cannot certify your live token, Discord permissions or Wispbyte account settings.
+
+Core modules: `game.js` shared command services; `economy.js` mint/transfer/treasury invariants; `sessions.js` persistent owner/revision state; `ui.js` Discord component builders; `duels.js` atomic challenges/matchmaking; `role-shop.js` escrow/recovery; `discord-roles.js` authoritative role API adapter; `discord.js` transport and acknowledgements; `runtime.js` validated startup/shutdown; `migration-v3.js` additive storage; `leveling.js` exact curves; `profiles.js` bounded renderer. The optional Python coin-art authoring tool is not a runtime dependency.
+
+
+### Clean command presentation
+
+`level`, `rank`, and `profile` send the profile PNG alone, with no duplicate statistics message, through both prefix and slash commands. If rendering is busy or image delivery fails, Neox shows a brief retry notice instead of a wall of profile text. Main rewards, wallet/bank balances, hunting results, inventory, rankings and purchases use compact spacing and recognizable emojis. Shop buttons keep their text labels alongside emoji icons. The rules panel reflects direct bot-paid casino winnings.
+
+
+### Themed game cards and item icons
+
+Inventory, equipment, gems and loot use purple embeds; collection and companion views use green; global and XP rankings use gold with medals for the top three. Battle/boss cards use green for victory, red for defeat and amber for a draw, with health totals, hunting XP and the full round log. Both prefix aliases and slash commands share these presentations. Large descriptions split into bounded embeds without dropping entries. Level/profile cards remain image-only.
+
+Shop item names and dropdowns have matching icons by item type (weapons, armor, accessories, gems, caches and food). The item detail view uses the same icon. Server-role listings use a role tag icon. Inventory entries show readable names and retain IDs needed for commands.
+
+
+### Keeping persistent storage safe and small
+
+- Keep `data/` on persistent local storage and run one bot instance. SQLite commits balances, inventory and progression atomically. Database/backup files use private `0600` permissions; newly created data directories use `0700`.
+- WAL automatically checkpoints every 256 pages (about 1 MiB with standard 4 KiB pages). Its retained size target is 1 MiB. Five-minute maintenance performs a passive checkpoint and attempts a non-waiting truncation when all frames are checkpointed. These are targets, not hard disk caps: active readers or large transactions can temporarily grow the WAL. Never delete live `-wal` or `-shm` files.
+- New databases use incremental auto-vacuum with bounded reclamation during maintenance. Existing databases keep their layout and reuse deleted pages; startup never rebuilds or vacuums them. Avoid routine full `VACUUM` on a nearly full host, since it needs extra temporary space.
+- Existing history limits and expiry cleanup remain enabled. Accounts, balances, inventory, discoveries, progression, unresolved role purchases and held refunds are never deleted to save space. Player data necessarily grows as the game grows.
+- `npm run storage` reports selected project sizes, filesystem space, reusable SQLite pages and a read-only integrity check. It warns at 70% of the 1 GiB project budget or less than 100 MiB filesystem space. Hosting-account quotas can differ from filesystem free space.
+- Create consistent backups using `node scripts/backup.js /persistent/backup/unique-name.sqlite`, then download them off the bot's small volume. Publishing is atomic and never replaces an existing destination, even during concurrent backup attempts. Backups are integrity-checked first; failed staging files are cleaned up. Backups need space for another full database, and the destination filesystem must support hard links. There is no unlimited automatic on-host backup archive.
+
+Durable settings reduce loss risk but cannot replace off-host backups or protect against failed hosting storage. Do not replace SQLite files with JSON, disable journaling, or disable sync to reduce storage.
+
+
+### Discovering commands
+
+Anyone can use `n help` or `/help` before accepting the game rules. The guide lists all registered commands by category and shows this server's current prefix. If the server uses `!`, use `!help` instead.
+
+- `n help games` lists coinflip, dice, slots and duels with descriptions.
+- `n help cf` shows syntax, aliases, permissions and a wager example; `n help coin flip` works too.
+- `n help roleshopadmin` explains role-shop management permissions.
+- `/help args:games` and `/help args:cf` show the same guides.
+
+Available categories: start, coins, hunting, items, gear, combat, games, progress, trading, roles, settings and legacy. Optional arguments use square brackets. Help is generated from the central command registry so command names, aliases and syntax remain consistent with the parser.

@@ -1,8 +1,8 @@
 "use strict";
 const quests = [
-  { id: "hunt", name: "Trail of Echoes", goal: 3, coins: 300 },
-  { id: "cf", name: "Faces of Fate", goal: 3, coins: 200 },
-  { id: "battle", name: "Hold the Rift", goal: 2, coins: 400 },
+  { id: "hunt", name: "Trail of Echoes", goal: 3 },
+  { id: "cf", name: "Faces of Fate", goal: 3 },
+  { id: "battle", name: "Hold the Rift", goal: 2 },
 ];
 function advance(game, user, action) {
   const kind = action === "boss" ? "battle" : action;

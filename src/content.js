@@ -13,15 +13,21 @@ const rarities = [
 const weights = [600000, 250000, 100000, 35000, 11000, 3000, 900, 100];
 const values = [12, 30, 90, 300, 1200, 5000, 20000, 100000];
 const habitats = ["Gloamwood", "Emberfen", "Frostveil", "Starfall", "Duskreef"];
-const species = ["Moth", "Lynx", "Otter", "Finch", "Gecko"];
+const species = [
+  "Shadow Wolf",
+  "Abyss Wraith",
+  "Cursed Knight",
+  "Infernal Beast",
+  "Void Stalker",
+];
 const aspects = [
-  "Mosswhisker",
-  "Copperwing",
-  "Mistbound",
-  "Moonlit",
-  "Sunspun",
+  "Ashen",
+  "Bloodfang",
+  "Dread",
+  "Phantom",
+  "Riftbound",
   "Riftborn",
-  "Celestial",
+  "Eclipse",
   "Nullheart",
 ];
 const animals = rarities.flatMap((rarity, r) =>
@@ -50,7 +56,7 @@ const gems = ["lucky", "hunting", "xp", "currency", "event"].flatMap((kind) =>
     duration: 3600000 * tier,
     uses: 20 * tier,
     bonus: 0.1 * tier,
-    price: 500 * tier * tier,
+    price: 500 * tier ** 3,
   })),
 );
 const types = [
@@ -89,7 +95,7 @@ const equipment = types.flatMap((type, t) =>
               : type === "accessory"
                 ? "fortune"
                 : "force",
-    price: 200 * (r + 1) ** 3,
+    price: 200 * (r + 1) ** 5,
     tradeable: true,
     maxLevel: 10,
     durability: null,
@@ -99,7 +105,6 @@ const boxes = [
   {
     id: "beginner",
     price: 250,
-    coins: [80, 160],
     drops: [
       ["gem", 60],
       ["animal", 30],
@@ -110,7 +115,6 @@ const boxes = [
   {
     id: "daily",
     price: 400,
-    coins: [100, 240],
     drops: [
       ["gem", 45],
       ["animal", 45],
@@ -121,35 +125,30 @@ const boxes = [
   {
     id: "weapon",
     price: 1200,
-    coins: [50, 150],
     drops: [["weapon", 100]],
     maxTier: 4,
   },
   {
     id: "armor",
     price: 1200,
-    coins: [50, 150],
     drops: [["armor", 100]],
     maxTier: 4,
   },
   {
     id: "animal",
     price: 700,
-    coins: [50, 100],
     drops: [["animal", 100]],
     maxTier: 5,
   },
   {
     id: "gem",
     price: 800,
-    coins: [50, 100],
     drops: [["gem", 100]],
     maxTier: 3,
   },
   {
     id: "legendary",
-    price: 15000,
-    coins: [1000, 2000],
+    price: 75000,
     drops: [
       ["equipment", 50],
       ["animal", 30],
@@ -161,7 +160,6 @@ const boxes = [
   {
     id: "event",
     price: 2000,
-    coins: [200, 500],
     drops: [
       ["gem", 50],
       ["animal", 40],
@@ -171,6 +169,10 @@ const boxes = [
   },
 ].map((b) => ({
   ...b,
+  name:
+    b.id === "animal"
+      ? "Monster Cache"
+      : `${b.id[0].toUpperCase()}${b.id.slice(1)} Cache`,
   quantity: [1, 3],
   tierWeights: [6000, 2500, 1000, 350, 110, 40],
 }));
@@ -180,6 +182,7 @@ module.exports = {
   values,
   habitats,
   animals,
+  monsters: animals,
   gems,
   equipment,
   boxes,

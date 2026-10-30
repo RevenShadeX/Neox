@@ -17,7 +17,7 @@ const count = 5000;
 try {
   for (let i = 0; i < count; i++) {
     const userId = String(100000000000000000n + BigInt(i));
-    for (const cmd of ["daily", "hunt", "work"]) {
+    for (const cmd of ["agree", "daily", "hunt"]) {
       time += 21000;
       game.execute(cmd, [], { userId });
     }

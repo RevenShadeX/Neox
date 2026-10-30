@@ -1,6 +1,6 @@
 "use strict";
 require("dotenv").config({ quiet: true });
-const { open } = require("../src/database");
+const Database = require("better-sqlite3");
 const path = require("node:path");
 const fs = require("node:fs");
 async function main() {
@@ -21,13 +21,30 @@ async function main() {
       "Choose a new backup filename; existing files are never overwritten.",
     );
   fs.mkdirSync(path.dirname(output), { recursive: true, mode: 0o700 });
-  const store = open(source);
+  const database = new Database(source, {
+    readonly: true,
+    fileMustExist: true,
+  });
+  database.pragma("busy_timeout=5000");
+  const staging = fs.mkdtempSync(path.join(path.dirname(output), ".neox-backup-"));
+  const partial = path.join(staging, "snapshot.sqlite");
   try {
-    await store.db.backup(output);
-    fs.chmodSync(output, 0o600);
+    await database.backup(partial);
+    fs.chmodSync(partial, 0o600);
+    const snapshot = new Database(partial, { readonly: true, fileMustExist: true });
+    try {
+      if (snapshot.pragma("quick_check", { simple: true }) !== "ok")
+        throw Error("Backup integrity check failed; backup was not published.");
+    } finally {
+      snapshot.close();
+    }
+    // Same-filesystem hard link publishes a complete file atomically and fails
+    // with EEXIST if another process already chose this destination.
+    fs.linkSync(partial, output);
     console.log("Consistent SQLite backup created.");
   } finally {
-    store.close();
+    database.close();
+    fs.rmSync(staging, { recursive: true, force: true });
   }
 }
 main().catch((e) => {
