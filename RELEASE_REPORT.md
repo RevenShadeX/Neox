@@ -164,3 +164,8 @@ Current currency display name is Doolar. Updated command descriptions, balances,
 ## Streaming presence
 
 Configured the Discord client initial presence as online with ActivityType.Streaming, activity name RevenShadeX on Twitch and URL https://www.twitch.tv/revenshadex. Applies on login/reconnection with no polling, added storage or privileged intent.
+
+
+## Streaming activity text
+
+Updated the streaming activity text to the requested wording: Loosing, winning all on your skills. The Twitch URL and online/streaming presence remain unchanged.

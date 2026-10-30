@@ -72,7 +72,7 @@ function createClient(
     presence: {
       status: "online",
       activities: [{
-        name: "RevenShadeX on Twitch",
+        name: "Loosing, winning all on your skills",
         type: ActivityType.Streaming,
         url: "https://www.twitch.tv/revenshadex",
       }],

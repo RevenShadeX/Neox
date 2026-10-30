@@ -303,4 +303,4 @@ Expiry jobs survive restarts, listing deletion and routine purchase-history clea
 
 ### Streaming presence
 
-Neox identifies with online status and a Streaming activity named **RevenShadeX on Twitch**, linked to https://www.twitch.tv/revenshadex. Discord receives this presence on login/reconnection. It does not depend on checking whether the Twitch channel is currently live and requires no additional privileged gateway intent.
+Neox identifies with online status and a Streaming activity named **Loosing, winning all on your skills**, linked to https://www.twitch.tv/revenshadex. Discord receives this presence on login/reconnection. It does not depend on checking whether the Twitch channel is currently live and requires no additional privileged gateway intent.
