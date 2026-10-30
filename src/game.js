@@ -36,6 +36,7 @@ const { Economy } = require("./economy");
 const { Sessions } = require("./sessions");
 const { RoleShop } = require("./role-shop");
 const { Duels } = require("./duels");
+const { BattleChallenges } = require("./battle-challenges");
 const { readMaxBet } = require("./config");
 const { Progression, readLevelingConfig } = require("./leveling");
 const { quests, advance: advanceQuest } = require("./quests");
@@ -65,6 +66,7 @@ class Game {
     this.sessions = new Sessions(this);
     this.roleShop = new RoleShop(this);
     this.duels = new Duels(this);
+    this.battleChallenges = new BattleChallenges(this);
   }
   player(id) {
     this.sql(
@@ -173,6 +175,9 @@ class Game {
         : this.duels.respond(ctx, id, action);
     });
   }
+  battleAction(id, action, ctx) {
+    return this.request(ctx, () => this.battleChallenges.respond(id, action, ctx));
+  }
   qty(id, kind, item) {
     return (
       this.sql(
@@ -196,7 +201,7 @@ class Game {
         "INSERT INTO inventory(user,kind,item,qty) VALUES(?,?,?,?) ON CONFLICT(user,kind,item) DO UPDATE SET qty=excluded.qty",
       ).run(id, kind, item, q);
   }
-  cooldown(id, key, ms) {
+  checkCooldown(id, key) {
     const now = this.clock(),
       row = this.sql(
         "SELECT until FROM cooldowns WHERE user=? AND command=?",
@@ -209,6 +214,10 @@ class Game {
       error.retryAt = row.until;
       throw error;
     }
+    return now;
+  }
+  cooldown(id, key, ms) {
+    const now = this.checkCooldown(id, key);
     this.sql(
       "INSERT INTO cooldowns(user,command,until) VALUES(?,?,?) ON CONFLICT(user,command) DO UPDATE SET until=excluded.until",
     ).run(id, key, now + ms);
@@ -560,7 +569,12 @@ class Game {
           if (rows.length) sections.push(`**${rarity.toUpperCase()}**\n${rows.map(({ animal, qty }) => `${animal.id} • ${animal.name}${qty > 1 ? ` ×${qty}` : ""}`).join("\n")}`);
         }
         const boosts = Object.entries(b).map(([kind, bonus]) => `${kind} +${Math.round(bonus * 100)}%`).join(" • ");
-        return `**NEOX • HUNT COMPLETE**\n\n${sections.join("\n\n")}\n\n**REWARDS**\n🪙 +${fmt(reward)} Dark Coins • ✨ +${fmt(xp)} hunting XP\n🔥 Streak ${streak} • 🎯 Hunting level ${level(this.player(id))}${boosts ? `\n💎 Active gems: ${boosts}` : ""}\n\nManual hunt • 20s cooldown`;
+        return {
+          content: `**NEOX • HUNT COMPLETE**\n\n${sections.join("\n\n")}\n\n**REWARDS**\n🪙 +${fmt(reward)} Dark Coins • ✨ +${fmt(xp)} hunting XP\n🔥 Streak ${streak} • 🎯 Hunting level ${level(this.player(id))}${boosts ? `\n💎 Active gems: ${boosts}` : ""}\n\nManual hunt • 20s cooldown`,
+          presentation: { kind: "hunt", found: ordered, reward, xp, streak,
+            huntingLevel: level(this.player(id)), boosts, readyAt: this.clock() + 20000,
+            displayName: cleanName(ctx.displayName || p.display_name) },
+        };
       }
       case "zoo": {
         const rows = this.sql(
@@ -1021,13 +1035,14 @@ class Game {
       case "boss":
       case "battle": {
         const boss = name === "boss";
-        this.cooldown(id, boss ? "boss" : "battle", boss ? 600000 : 60000);
         const enemyId = a[0] ? userId(a[0]) : null;
         assert(!enemyId || enemyId !== id, "Choose another player.");
         const enemy = enemyId
           ? this.sql("SELECT * FROM players WHERE id=?").get(enemyId)
           : null;
         assert(!enemyId || enemy, "That player must play Neox first.");
+        if (enemyId && !ctx.confirmedBattle) return this.battleChallenges.create(ctx, enemyId);
+        this.cooldown(id, boss ? "boss" : "battle", boss ? 600000 : 60000);
         if (enemyId) this.cooldown(id, `rival:${enemyId}`, 3600000);
         const stage = !boss && !enemy ? (this.sql("SELECT stage FROM battle_stages WHERE user=?").get(id)?.stage || 1) : null;
         const stageBoss = stage !== null && stage % 10 === 0;

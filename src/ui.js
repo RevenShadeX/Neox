@@ -305,6 +305,33 @@ function help(p) {
     allowedMentions,
   };
 }
+function hunt(output) {
+  const p = output.presentation;
+  const topTier = Math.max(...p.found.map(({ animal }) => animal.tier));
+  const colors = [0x64748b, 0x10b981, 0x3b82f6, 0xa855f7, 0xf59e0b, 0xec4899, 0x06b6d4, 0xef4444];
+  const card = embed("🐾 Hunt Complete", `**${markdownName(p.displayName)}** returned from the hunt.\n🎯 Hunting level **${p.huntingLevel}** • Next hunt <t:${Math.ceil(p.readyAt / 1000)}:R>`)
+    .setColor(colors[topTier]);
+  for (let tier = C.rarities.length - 1; tier >= 0; tier--) {
+    const entries = p.found.filter(({ animal }) => animal.tier === tier);
+    if (entries.length) card.addFields({ name: `✦ ${C.rarities[tier]}`, value: entries.map(({ animal, qty }) => `🐾 **${animal.name}** \`${animal.id}\`${qty > 1 ? ` ×${qty}` : ""}`).join("\n") });
+  }
+  card.addFields(
+    { name: "🪙 Dark Coins", value: `+${p.reward.toLocaleString("en-US")}`, inline: true },
+    { name: "✨ Hunting XP", value: `+${p.xp.toLocaleString("en-US")}`, inline: true },
+    { name: "🔥 Streak", value: `${p.streak} / 50`, inline: true },
+  );
+  if (output.globalXP) card.addFields({ name: "🌟 Global XP", value: `+${output.globalXP}`, inline: true });
+  if (p.boosts) card.addFields({ name: "💎 Active bonuses", value: p.boosts });
+  card.setFooter({ text: "Neox • Manual hunting • 20-second cooldown" });
+  return { content: "", embeds: [card], allowedMentions };
+}
+function battleChallenge(p) {
+  return {
+    content: "", embeds: [embed("⚔️ Battle Invitation", `<@${p.challenger}> challenges <@${p.opponent}> to a ranked equipment battle.\n\nOnly the challenged player can accept or decline. No wager or opponent coin transfer. Combat, equipment wear and progression begin after acceptance.\n\n⏳ Expires <t:${Math.ceil(p.expires / 1000)}:R>.`)],
+    components: [row(button(`nb:${p.id}:accept`, "Accept Battle", ButtonStyle.Success), button(`nb:${p.id}:decline`, "Decline"))],
+    allowedMentions,
+  };
+}
 const cardStyles = {
   inventory: ["🎒 Inventory", 0x8b5cf6],
   leaderboard: ["🏆 Global Leaderboard", 0xf59e0b], levels: ["🏆 Level Rankings", 0xf59e0b],
@@ -329,7 +356,7 @@ function commandCards(output) {
         { name: "✨ Progress", value: `+${c.xp} hunting XP`, inline: true },
         { name: "📜 Battle rounds · You / Opponent", value: `\`\`\`\n${c.log.join("\n")}\n\`\`\`` },
       ).setFooter({ text: "Neox • Saved equipment combat • No opponent coins taken" });
-    return [{ content: "", embeds: [card], allowedMentions }];
+    return [{ content: "", embeds: [card], components: [], allowedMentions }];
   }
   // One bounded embed per message, preserving every line of large inventories.
   const pages = [];
@@ -348,4 +375,4 @@ function commandCards(output) {
     allowedMentions,
   }));
 }
-module.exports = { panel, modal, duel, queue, help, commandCards, cid, RED, allowedMentions };
+module.exports = { panel, modal, duel, queue, help, hunt, battleChallenge, commandCards, cid, RED, allowedMentions };

@@ -42,7 +42,7 @@ function guide(prefix, query) {
     ];
     if (key === "battle") fields.push(
       { name: "🧭 Endless Rift & bosses", value: `${safePrefix} battle fights your current stage. Victory advances it; defeat keeps it. Every 10th stage is a boss and every 50th is elite. Use ${safePrefix} boss for the separate Sovereign challenge.` },
-      { name: "🤝 Ranked sparring", value: `${safePrefix} battle @user starts automatic combat against a player who has started Neox. This is not a wager; no opponent coins are taken. Consent-based wagers use duel instead.` },
+      { name: "🤝 Ranked sparring", value: `${safePrefix} battle @user sends an invitation with Accept Battle and Decline buttons. Only the challenged player can respond before it expires. This is not a wager; no opponent coins are taken. Consent-based wagers use duel instead.` },
       { name: "⚔️ Equipment, wear & repairs", value: `Use equip, equipment, upgrade and enhance to improve combat stats. Equipped gear loses 1–4% condition per fight; ${safePrefix} repair all restores it for Dark Coins. PvE victories may drop Weapon Caches; use ${safePrefix} open weapon.` },
       { name: "🌀 Sacrifice & infusions", value: `${safePrefix} sacrifice all turns duplicate monsters into Rift Essence while keeping one of each. ${safePrefix} infuse armor-id amount adds permanent armor defense, capped at +200 per piece. A companion selected with pet also helps in combat.` },
       { name: "🐾 Manual hunting", value: `${safePrefix} hunt has a 20-second cooldown. View gems and activate a gem ID for limited-use bonuses; hunting does not run automatically.` },

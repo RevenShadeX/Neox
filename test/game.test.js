@@ -276,10 +276,14 @@ test("ranked battle updates both ratings and protects opponent money", (t) => {
   f.run("cash");
   f.run("cash", [], B);
   const before = f.game.player(B).wallet;
-  assert.match(f.run("battle", [B]), /Ranked/);
+  const ctx = { userId: A, guildId: "55555", memberIds: [A, B] };
+  const invitation = f.game.executeResult("battle", [B], ctx).presentation;
+  assert.equal(invitation.kind, "battle_challenge");
+  const accepted = f.game.battleAction(invitation.id, "accept", { ...ctx, userId: B });
+  assert.match(accepted.content, /Ranked/);
   assert.equal(f.game.player(B).wallet, before);
   f.tick(60000);
-  assert.throws(() => f.run("battle", [B]), /Try again/);
+  assert.throws(() => f.game.executeResult("battle", [B], ctx), /Try again/);
 });
 test("coinflip and slots payout correctly with deterministic test randomness", (t) => {
   const rng = { int: () => 1 };

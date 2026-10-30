@@ -116,7 +116,7 @@ const commands = {
   feed: { usage: "[quantity]", description: "Train your companion with food" },
   battle: {
     usage: "[@user]",
-    description: "Fight an expedition or a ranked rival",
+    description: "Fight an expedition or invite a rival to accept a ranked battle",
   },
   trade: {
     usage: "@user gear-id price",

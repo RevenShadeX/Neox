@@ -67,6 +67,7 @@ function open(filename = "./data/neox.sqlite") {
   try {
     migrate(db);
     db.exec("CREATE INDEX IF NOT EXISTS ui_queue_recovery ON ui_sessions(status,expires) WHERE kind='queue_delivery'");
+    db.exec("CREATE INDEX IF NOT EXISTS ui_battle_pending ON ui_sessions(expires,owner) WHERE kind='battle_challenge' AND status='active'");
   } catch (error) {
     db.close();
     throw error;

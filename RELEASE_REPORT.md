@@ -136,3 +136,12 @@ Added structured COOLDOWN errors carrying the actual retry deadline and a shared
 The scheduler uses one unreferenced timer, at most 128 tracked notices, bounded processing batches and limited parallel edits. Prefix spam reuses existing notices. Failed edits still reach deletion cleanup; missing messages and deletion errors are safe. Graceful shutdown clears notices and late sends cannot recreate timers. No new persistent tables, balances, progression changes or generated files.
 
 Verification: 869 tests passed, including prefix/slash auto-deletion, exact five-second behavior, singular labels, long cooldowns, bounded storage, safe Discord errors and shutdown races.
+
+
+## Hunt cards and ranked battle acceptance
+
+Hunting now returns structured presentation data and a rarity-colored embed with species IDs, grouped counts, rewards, streak, separate hunting/global XP, bonuses and next-hunt timestamp. Both command transports share the renderer and retain secure emoji decoration and mention suppression.
+
+Ranked player battles now require an opponent-only Accept Battle/Decline component. Challenges are stored in existing expiring UI sessions with a small partial pending index; no new persistent progression tables. Creation validates current membership, agreements, existing invitations and challenger cooldowns without awarding XP or wearing equipment. Acceptance rechecks membership/consent and executes existing combat atomically under the challenger's identity, exactly once. Completed/declined/expired/foreign-player/foreign-server controls cannot replay combat. Successful results clear invitation buttons. PvE/boss and consent-based dice-duel behavior remain intact.
+
+Verification: 878 tests passed, including both transports for hunt cards and real battle buttons, exact reward displays, invitation side-effect checks, owner/server validation, expiry, decline, replay protection and cooldown checks.

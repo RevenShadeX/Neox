@@ -212,6 +212,10 @@ function createClient(
       await transport.show(UI.panel(game, p.session));
       return;
     }
+    if (p?.kind === "battle_challenge") {
+      await transport.show(UI.battleChallenge(p));
+      return;
+    }
     if (p?.kind === "duel") {
       await transport.show(UI.duel(p));
       if (output.matchedQueue) await duelDelivery.notify(output.matchedQueue);
@@ -222,7 +226,8 @@ function createClient(
       await duelDelivery.bind(p.id, source, message);
       return;
     }
-    if (p?.kind === "slots")
+    if (p?.kind === "hunt") await transport.show(UI.hunt(output));
+    else if (p?.kind === "slots")
       await presentSlots(output, transport, emojis, animation);
     else if (p?.kind === "coinflip")
       await presentCoinflip(output, transport, {
@@ -325,6 +330,10 @@ function createClient(
         game.requireAgreement(ctx.userId);
         await enrichDuel(message, normalizeArguments(name, parsed.args), ctx);
       }
+      if (name === "battle" && parsed.args[0]) {
+        game.requireAgreement(ctx.userId);
+        ctx.memberIds = await members(message, [ctx.userId, userId(parsed.args[0])]);
+      }
       output = execute(name, parsed.args, ctx);
     } catch (e) {
       if (e.code === "RULES_REQUIRED") output = execute("rules", [], ctx);
@@ -417,6 +426,10 @@ function createClient(
           game.requireAgreement(ctx.userId);
           await enrichDuel(i, normalizeArguments(name, args), ctx);
         }
+        if (name === "battle" && args[0]) {
+          game.requireAgreement(ctx.userId);
+          ctx.memberIds = await members(i, [ctx.userId, userId(args[0])]);
+        }
         output = execute(name, args, ctx);
       } catch (e) {
         if (e.code === "RULES_REQUIRED") output = execute("rules", [], ctx);
@@ -433,6 +446,19 @@ function createClient(
     const id = i.customId || "";
     if (id.startsWith("neox:"))
       throw new GameError("This old panel expired. Open a new Neox command.");
+    if (id.startsWith("nb:")) {
+      const match = /^nb:([a-f0-9]{24}):(accept|decline)$/.exec(id);
+      if (!match || !i.isButton?.()) throw new GameError("Invalid battle control.");
+      const battle = game.battleChallenges.verify(match[1], ctx);
+      await i.deferUpdate();
+      if (match[2] === "accept") ctx.memberIds = await members(i, [battle.owner, battle.opponent]);
+      const output = game.battleAction(match[1], match[2], ctx);
+      await deliver(output, i, {
+        show: (p) => i.editReply({ components: [], ...p }), finish: (_, p) => i.editReply(p),
+        fallback: (p) => i.followUp(p), extra: (p) => i.followUp(p),
+      });
+      return;
+    }
     if (id.startsWith("nd:") || id.startsWith("nq:")) {
       const match = /^(nd|nq):([a-f0-9]{24}):(accept|decline|cancel)$/.exec(id);
       if (!match || (match[1] === "nq" ? match[3] !== "cancel" : match[3] === "cancel"))
