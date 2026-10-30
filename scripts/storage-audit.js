@@ -62,6 +62,25 @@ if (!includedDb) {
   }
 }
 console.log("Tracked total: " + fmt(total) + " / " + fmt(budget));
+const disk = fs.statfsSync(root);
+const available = Number(disk.bavail) * Number(disk.bsize);
+console.log("Filesystem available: " + fmt(available) + " (host quota may differ)");
+if (available < 100 * 1048576) {
+  console.warn("WARNING: less than 100 MiB of filesystem space is available.");
+  process.exitCode = 2;
+}
+if (fs.existsSync(database)) {
+  const Database = require("better-sqlite3");
+  const db = new Database(database, { readonly: true, fileMustExist: true });
+  try {
+    const pageSize = db.pragma("page_size", { simple: true });
+    const freePages = db.pragma("freelist_count", { simple: true });
+    console.log("SQLite reusable: " + fmt(pageSize * freePages));
+    console.log("SQLite quick check: " + db.pragma("quick_check", { simple: true }));
+  } finally {
+    db.close();
+  }
+}
 if (total >= warning) {
   console.warn("WARNING: tracked files exceed 70% of the 1 GiB budget.");
   process.exitCode = 2;

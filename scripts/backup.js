@@ -26,12 +26,25 @@ async function main() {
     fileMustExist: true,
   });
   database.pragma("busy_timeout=5000");
+  const staging = fs.mkdtempSync(path.join(path.dirname(output), ".neox-backup-"));
+  const partial = path.join(staging, "snapshot.sqlite");
   try {
-    await database.backup(output);
-    fs.chmodSync(output, 0o600);
+    await database.backup(partial);
+    fs.chmodSync(partial, 0o600);
+    const snapshot = new Database(partial, { readonly: true, fileMustExist: true });
+    try {
+      if (snapshot.pragma("quick_check", { simple: true }) !== "ok")
+        throw Error("Backup integrity check failed; backup was not published.");
+    } finally {
+      snapshot.close();
+    }
+    // Same-filesystem hard link publishes a complete file atomically and fails
+    // with EEXIST if another process already chose this destination.
+    fs.linkSync(partial, output);
     console.log("Consistent SQLite backup created.");
   } finally {
     database.close();
+    fs.rmSync(staging, { recursive: true, force: true });
   }
 }
 main().catch((e) => {

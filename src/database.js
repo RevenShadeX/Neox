@@ -11,15 +11,22 @@ function open(filename = "./data/neox.sqlite") {
       mode: 0o700,
     });
   const db = new Database(filename);
+  if (filename !== ":memory:") fs.chmodSync(filename, 0o600);
   if (db.pragma("user_version", { simple: true }) > 3) {
     db.close();
     throw Error("This database was created by a newer Neox version.");
   }
+  // Enable incremental space reclamation only before the first schema exists.
+  // Existing databases keep their layout: no startup VACUUM or data rewrite.
+  if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' LIMIT 1").get())
+    db.pragma("auto_vacuum = INCREMENTAL");
   db.pragma("journal_mode = WAL");
+  db.pragma("synchronous = FULL");
   db.pragma("foreign_keys = ON");
   db.pragma("busy_timeout = 5000");
   db.pragma("cache_size = -4096");
-  db.pragma("journal_size_limit = 8388608");
+  db.pragma("wal_autocheckpoint = 256");
+  db.pragma("journal_size_limit = 1048576");
   db.exec(`
  CREATE TABLE IF NOT EXISTS players(
  id TEXT PRIMARY KEY, wallet INTEGER NOT NULL DEFAULT 0 CHECK(typeof(wallet)='integer' AND wallet BETWEEN 0 AND ${MAX}),
@@ -102,7 +109,19 @@ function open(filename = "./data/neox.sqlite") {
           );
         }
       })();
-      db.pragma("wal_checkpoint(PASSIVE)");
+      if (db.pragma("auto_vacuum", { simple: true }) === 2)
+        db.pragma("incremental_vacuum(32)");
+      const checkpoint = db.pragma("wal_checkpoint(PASSIVE)")[0];
+      // Never wait on a reader just to save space. SQLite coordinates all locks;
+      // do not unlink live WAL/SHM files ourselves.
+      if (!checkpoint.busy && checkpoint.log === checkpoint.checkpointed) {
+        db.pragma("busy_timeout = 0");
+        try {
+          db.pragma("wal_checkpoint(TRUNCATE)");
+        } finally {
+          db.pragma("busy_timeout = 5000");
+        }
+      }
     },
   };
 }

@@ -96,3 +96,12 @@ Verification: 774 tests passed; all 44 JavaScript files passed syntax checks; ga
 Added matching shop icons to item lists, dropdowns and purchase details, including role-listing tags. Inventory retains IDs while showing readable names and equipment icons. Shared command presentations now render themed embeds for inventory, equipment, gems, loot, collections, companions, history and rankings. Battle/boss cards include outcome coloring, health, earned hunting XP and all rounds. Prefix/slash command delivery uses the same renderer; level/profile attachments remain image-only. No economy or saved-data migration changes.
 
 Verification: 784 tests passed, including all shop categories, battle/boss summaries, inventory names, long-description limits, and both transports for inventory, battles and leaderboards. Game smoke checks and JavaScript syntax checks passed.
+
+
+## Storage safety and footprint
+
+Explicit SQLite FULL synchronous WAL commits, 256-page auto-checkpoints, a 1 MiB retained journal target, private database permissions and non-waiting idle WAL truncation. New databases enable incremental auto-vacuum before schema creation and reclaim a bounded number of pages during maintenance. Existing database layouts and permanent/pending data are preserved without an automatic rebuild. Storage audits now report free filesystem space, reusable pages and integrity, with a low-space warning.
+
+Backups are built privately and integrity-checked before atomic, no-replace hard-link publication. Concurrent destination creation cannot overwrite another backup, and staging files are removed on failure. Source databases remain read-only and unmigrated during backup. Off-host retention and temporary disk requirements are documented.
+
+Verification: 790 tests passed, including new/legacy storage layouts, incremental reclamation, active-reader checkpoint safety, retained balances, backup permissions/integrity and deterministic backup publication races.
