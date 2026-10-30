@@ -62,7 +62,7 @@ const commands = {
   equip: { usage: "gear-id", description: "Equip owned gear" },
   unequip: { usage: "weapon|armor|accessory", description: "Remove equipment" },
   compare: { usage: "gear-id gear-id", description: "Compare two owned items" },
-  shop: { usage: "[page]", description: "Browse boxes, gems and equipment" },
+  shop: { aliases: ["sh"], usage: "[page]", description: "Browse boxes, gems and equipment" },
   buy: { usage: "item-id [quantity]", description: "Purchase items" },
   sell: { usage: "gear-id", description: "Sell unequipped equipment" },
   boxes: { description: "Box inventory" },
