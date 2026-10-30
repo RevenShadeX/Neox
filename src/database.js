@@ -11,6 +11,10 @@ function open(filename = "./data/neox.sqlite") {
       mode: 0o700,
     });
   const db = new Database(filename);
+  if (db.pragma("user_version", { simple: true }) > 3) {
+    db.close();
+    throw Error("This database was created by a newer Neox version.");
+  }
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   db.pragma("busy_timeout = 5000");
@@ -18,7 +22,7 @@ function open(filename = "./data/neox.sqlite") {
   db.pragma("journal_size_limit = 8388608");
   db.exec(`
  CREATE TABLE IF NOT EXISTS players(
- id TEXT PRIMARY KEY, wallet INTEGER NOT NULL DEFAULT 500 CHECK(typeof(wallet)='integer' AND wallet BETWEEN 0 AND ${MAX}),
+ id TEXT PRIMARY KEY, wallet INTEGER NOT NULL DEFAULT 0 CHECK(typeof(wallet)='integer' AND wallet BETWEEN 0 AND ${MAX}),
  bank INTEGER NOT NULL DEFAULT 0 CHECK(typeof(bank)='integer' AND bank BETWEEN 0 AND ${MAX}),
  xp INTEGER NOT NULL DEFAULT 0, hunts INTEGER NOT NULL DEFAULT 0, streak INTEGER NOT NULL DEFAULT 0,
  last_hunt INTEGER NOT NULL DEFAULT 0, wins INTEGER NOT NULL DEFAULT 0, losses INTEGER NOT NULL DEFAULT 0,
@@ -72,13 +76,31 @@ function open(filename = "./data/neox.sqlite") {
         );
         sql("DELETE FROM ledger WHERE at < ?").run(now - 30 * 86400000);
         db.exec(
-          "DELETE FROM ledger WHERE id < (SELECT COALESCE(MAX(id),0)-100000 FROM ledger)",
+          "DELETE FROM ledger WHERE id <= (SELECT COALESCE(MAX(id),0)-100000 FROM ledger)",
         );
         sql("DELETE FROM processed WHERE at < ?").run(now - 86400000);
         sql("DELETE FROM cooldowns WHERE until < ?").run(now);
         sql("DELETE FROM effects WHERE expires < ? OR uses <= 0").run(now);
         sql("DELETE FROM trades WHERE expires < ?").run(now);
         sql("DELETE FROM dice_duels WHERE expires < ?").run(now);
+        sql(
+          "UPDATE duel_matches SET status='expired' WHERE status='pending' AND expires<=?",
+        ).run(now);
+        sql("DELETE FROM duel_presence WHERE expires<=?").run(now);
+        sql("DELETE FROM matchmaking WHERE expires<=?").run(now);
+        sql("DELETE FROM ui_sessions WHERE expires<?").run(now - 86400000);
+        sql(
+          "DELETE FROM duel_matches WHERE status!='pending' AND expires<?",
+        ).run(now - 7 * 86400000);
+        sql(
+          "DELETE FROM role_purchases WHERE status IN('delivered','refunded') AND updated<?",
+        ).run(now - 90 * 86400000);
+        for (const table of ["economy_events", "wager_history"]) {
+          sql(`DELETE FROM ${table} WHERE at<?`).run(now - 30 * 86400000);
+          db.exec(
+            `DELETE FROM ${table} WHERE id<=(SELECT COALESCE(MAX(id),0)-100000 FROM ${table})`,
+          );
+        }
       })();
       db.pragma("wal_checkpoint(PASSIVE)");
     },

@@ -1,6 +1,6 @@
 "use strict";
 require("dotenv").config({ quiet: true });
-const { open } = require("../src/database");
+const Database = require("better-sqlite3");
 const path = require("node:path");
 const fs = require("node:fs");
 async function main() {
@@ -21,13 +21,17 @@ async function main() {
       "Choose a new backup filename; existing files are never overwritten.",
     );
   fs.mkdirSync(path.dirname(output), { recursive: true, mode: 0o700 });
-  const store = open(source);
+  const database = new Database(source, {
+    readonly: true,
+    fileMustExist: true,
+  });
+  database.pragma("busy_timeout=5000");
   try {
-    await store.db.backup(output);
+    await database.backup(output);
     fs.chmodSync(output, 0o600);
     console.log("Consistent SQLite backup created.");
   } finally {
-    store.close();
+    database.close();
   }
 }
 main().catch((e) => {

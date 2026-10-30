@@ -6,7 +6,7 @@ const fs = require("node:fs"),
   path = require("node:path");
 const Database = require("better-sqlite3");
 const { open, MAX } = require("../src/database");
-const { Game } = require("../src/game");
+const { Game } = require("../test-support/legacy-game.cjs");
 const { readLevelingConfig, createCurve, MAX_XP } = require("../src/leveling");
 const { migrate } = require("../src/migrations");
 const { ProfileRenderer, BoundedCache, avatarURL } = require("../src/profiles");
@@ -206,17 +206,17 @@ test("full-wallet level rewards remain pending and can be claimed exactly once",
   f.game.player(A);
   f.store
     .sql("UPDATE players SET wallet=?,global_xp=19999 WHERE id=?")
-    .run(MAX, A);
+    .run(MAX - 1, A);
   const result = f.run("cf", ["1", "t"]);
   assert.equal(result.levelUp.reward, 10000);
-  assert.equal(result.levelUp.credited, 1);
-  assert.equal(result.levelUp.pending, 9999);
+  assert.equal(result.levelUp.credited, 2);
+  assert.equal(result.levelUp.pending, 9998);
   assert.equal(f.game.player(A).wallet, MAX);
   assert.throws(() => f.run("levelrewards"), /wallet is full/);
   f.run("deposit", ["10000"]);
   f.run("levelrewards");
   assert.equal(f.game.player(A).pending_level_coins, 0);
-  assert.equal(f.game.player(A).wallet, MAX - 1);
+  assert.equal(f.game.player(A).wallet, MAX - 2);
   assert.throws(() => f.run("levelrewards"), /No pending/);
 });
 test("actual daily quests award XP/currency once and reset by UTC day", (t) => {
@@ -229,7 +229,7 @@ test("actual daily quests award XP/currency once and reset by UTC day", (t) => {
   const before = f.game.player(A).wallet;
   const result = f.run("quest", ["claim", "hunt"]);
   assert.equal(result.globalXP, 10);
-  assert.equal(f.game.player(A).wallet, before + 300);
+  assert.equal(f.game.player(A).wallet, before);
   assert.throws(() => f.run("quest", ["claim", "hunt"]), /No completed/);
   assert.equal(f.game.player(A).global_xp, 16);
   f.tick(86400000);
@@ -246,7 +246,7 @@ test("claim all pays XP for each quest instead of only once for the command", (t
   const r = f.run("quest", ["claim", "all"]);
   assert.equal(r.completedQuests, 3);
   assert.equal(r.globalXP, 30);
-  assert.equal(f.game.player(A).wallet, 1400);
+  assert.equal(f.game.player(A).wallet, 500);
   assert.throws(() => f.run("quest", ["claim", "all"]), /No completed/);
 });
 function legacy(file, xp = 45000) {
@@ -282,7 +282,7 @@ test("idempotent legacy migration preserves every old field, balances, animals a
   s.close();
   s = open(file);
   try {
-    assert.equal(s.db.pragma("user_version", { simple: true }), 2);
+    assert.equal(s.db.pragma("user_version", { simple: true }), 3);
     assert.equal(
       s.sql("SELECT wallet FROM players WHERE id=?").get(A).wallet,
       123456,
@@ -318,11 +318,11 @@ test("newer database versions are refused instead of resetting their version", (
   const file = path.join(dir, "db.sqlite");
   legacy(file);
   let d = new Database(file);
-  d.pragma("user_version=3");
+  d.pragma("user_version=4");
   d.close();
   assert.throws(() => open(file), /newer Neox/);
   d = new Database(file);
-  assert.equal(d.pragma("user_version", { simple: true }), 3);
+  assert.equal(d.pragma("user_version", { simple: true }), 4);
   d.close();
 });
 test("level rewards and deduplication survive restart", (t) => {

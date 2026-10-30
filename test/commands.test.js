@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
 const { open, MAX } = require("../src/database");
-const { Game, GameError } = require("../src/game");
+const { Game, GameError } = require("../test-support/legacy-game.cjs");
 const { commands, registry, buildAliasRegistry } = require("../src/commands");
 const { parsePrefix, parseArguments } = require("../src/parser");
 const { readMaxBet } = require("../src/config");
@@ -24,7 +24,13 @@ function fixture(options = {}) {
     rng: { ...secure, coinflip: () => 1 },
     ...options,
   });
-  const ctx = { userId: A, guildId: "55555", manageGuild: true };
+  const ctx = {
+    userId: A,
+    guildId: "55555",
+    manageGuild: true,
+    manageRoles: true,
+    memberIds: [A, B],
+  };
   const run = (name, args = [], extra = {}) => {
     now += 6000;
     return game.executeResult(name, args, { ...ctx, ...extra });
@@ -114,6 +120,16 @@ for (const [content, canonical] of requestedOther)
     }
   });
 const validArgs = {
+  rules: [],
+  agree: [],
+  decline: [],
+  duel: [B, "10"],
+  dice: ["10", "HIGH"],
+  roleshop: [],
+  roleshopadmin: [],
+  rolepurchases: [],
+  refunds: [],
+  treasury: [],
   help: [],
   cash: [],
   deposit: ["100"],
@@ -168,6 +184,15 @@ const validArgs = {
   boss: [],
 };
 function prepare(f, command) {
+  if (command === "roleshop")
+    f.store
+      .sql("INSERT INTO role_shop_settings(guild,enabled) VALUES(?,1)")
+      .run("55555");
+  if (command === "refunds") {
+    f.game.player(A);
+    f.store.sql("INSERT INTO refund_credits(user,amount) VALUES(?,100)").run(A);
+  }
+
   f.game.player(A);
   f.game.player(B);
   if (command === "levelrewards")
@@ -213,6 +238,10 @@ for (const [name, definition] of Object.entries(commands)) {
             const parsed = parsePrefix(content);
             assert.equal(parsed.command, name);
             assert.deepEqual(parsed.args, validArgs[name]);
+            if (name === "pay") {
+              assert.throws(() => f.message(content), /gifting is disabled/);
+              return;
+            }
             const result = f.message(content);
             assert.ok(result.content.length);
             if (name === "prefix")
@@ -337,7 +366,7 @@ test("saved guild prefixes and progression survive reopening without a data migr
     assert.equal(game.getPrefix("55555"), "Z");
     assert.equal(game.getPrefix("66666"), "n");
     assert.equal(game.player(A).wallet, 500);
-    assert.equal(restored.db.pragma("user_version", { simple: true }), 2);
+    assert.equal(restored.db.pragma("user_version", { simple: true }), 3);
   } finally {
     restored.close();
     fs.rmSync(dir, { recursive: true, force: true });

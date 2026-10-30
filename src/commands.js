@@ -4,7 +4,10 @@ const commands = {
   rules: { description: "Read Neox game rules and currency policy" },
   agree: { description: "Accept the game rules to start playing" },
   decline: { description: "Decline game rules and keep gameplay locked" },
-  duel: { usage: "@user amount|accept|decline", description: "Challenge a server member to a fair dice duel" },
+  duel: {
+    usage: "@user amount|random amount|accept|decline|cancel",
+    description: "Challenge a server member to a fair dice duel",
+  },
   help: { usage: "[command]", description: "Command guide" },
   cash: {
     aliases: ["balance", "bal", "wallet"],
@@ -20,6 +23,24 @@ const commands = {
     usage: "amount|all",
     description: "Withdraw banked coins",
   },
+  pay: {
+    usage: "@user amount",
+    description: "Direct currency gifting is disabled",
+  },
+  weekly: { description: "Claim weekly item supplies" },
+  work: { description: "Work for companion supplies" },
+  treasury: {
+    usage: "[fund amount]",
+    description: "View or fund the existing-coin gambling treasury",
+  },
+  roleshop: { description: "Open this server role shop" },
+  roleshopadmin: {
+    description: "Manage this server role shop (Manage Server)",
+  },
+  rolepurchases: {
+    description: "Your recent role purchase and recovery statuses",
+  },
+  refunds: { description: "Claim role-purchase refunds held for wallet space" },
   daily: { aliases: ["d"], description: "Claim your daily reward" },
   history: { usage: "[page]", description: "Recent wallet transactions" },
   economy: { description: "Global economy totals" },
@@ -28,15 +49,23 @@ const commands = {
     usage: "[wealth|hunt|battle|xp] [page]",
     description: "Global player rankings",
   },
-  hunt: { aliases: ["h"], description: "Hunt monsters and earn Dark Coins and XP" },
-  zoo: { aliases: ["monsters"], usage: "[page]", description: "Your monster collection" },
+  hunt: {
+    aliases: ["h"],
+    description: "Hunt monsters and earn Dark Coins and XP",
+  },
+  zoo: {
+    aliases: ["monsters"],
+    usage: "[page]",
+    description: "Your monster collection",
+  },
   animals: {
     aliases: ["bestiary"],
     usage: "[page|monster-id]",
     description: "Monster catalogue and probabilities",
   },
   sellanimals: {
-    usage: "animal-id|all [quantity]",
+    aliases: ["release", "sellmonsters"],
+    usage: "monster-id|all [quantity]",
     description: "Release duplicate monsters; no Dark Coin reward",
   },
   huntstats: { description: "Hunting progression" },
@@ -64,7 +93,11 @@ const commands = {
   equip: { usage: "gear-id", description: "Equip owned gear" },
   unequip: { usage: "weapon|armor|accessory", description: "Remove equipment" },
   compare: { usage: "gear-id gear-id", description: "Compare two owned items" },
-  shop: { aliases: ["sh"], usage: "[page]", description: "Browse boxes, gems and equipment" },
+  shop: {
+    aliases: ["sh"],
+    usage: "[page]",
+    description: "Browse boxes, gems and equipment",
+  },
   buy: { usage: "item-id [quantity]", description: "Purchase items" },
   sell: { usage: "gear-id", description: "Sell unequipped equipment" },
   boxes: { description: "Box inventory" },
@@ -74,8 +107,8 @@ const commands = {
   },
   boxinfo: { usage: "box-id", description: "Published reward probabilities" },
   pet: {
-    usage: "[animal-id]",
-    description: "Select a collected animal companion",
+    usage: "[monster-id]",
+    description: "Select a collected monster companion",
   },
   feed: { usage: "[quantity]", description: "Train your companion with food" },
   battle: {
@@ -91,11 +124,15 @@ const commands = {
   cancel: { usage: "trade-id", description: "Cancel your outgoing offer" },
   cf: {
     aliases: ["coinflip", "coin flip", "flip"],
-    usage: "amount|all|half h|t|heads|tails",
+    usage: "[amount|all|half h|t|heads|tails]",
     description: "50/50 coin flip; 2× total payout",
   },
   slots: { usage: "amount", description: "Spin three reels" },
-  dice: { aliases: ["highlow"], usage: "amount|all|half high|low", description: "Guess a six-sided dice roll: high 4–6 or low 1–3" },
+  dice: {
+    aliases: ["highlow"],
+    usage: "amount|all|half high|low",
+    description: "Guess a six-sided dice roll: high 4–6 or low 1–3",
+  },
   prefix: {
     usage: "new-prefix",
     description: "Set server prefix (Manage Server)",
@@ -136,6 +173,14 @@ const argumentCounts = {
   deposit: [1, 1],
   withdraw: [1, 1],
   daily: [0, 0],
+  pay: [2, 2],
+  weekly: [0, 0],
+  work: [0, 0],
+  treasury: [0, 2],
+  roleshop: [0, 0],
+  roleshopadmin: [0, 0],
+  rolepurchases: [0, 0],
+  refunds: [0, 0],
   history: [0, 1],
   economy: [0, 0],
   leaderboard: [0, 2],
@@ -168,7 +213,7 @@ const argumentCounts = {
   trades: [0, 0],
   accept: [1, 1],
   cancel: [1, 1],
-  cf: [2, 2],
+  cf: [0, 2],
   slots: [1, 1],
   dice: [2, 2],
   prefix: [1, 1],
@@ -229,6 +274,11 @@ function normalizeArguments(command, args) {
   // Prefix strings are user configuration, not case-insensitive game keywords.
   if (command === "prefix") return [...args];
   const normalized = args.map((arg) => arg.toLowerCase());
+  if (
+    ["open", "boxinfo", "buy"].includes(command) &&
+    normalized[0] === "monster"
+  )
+    normalized[0] = "animal";
   if (command === "help" && normalized.length) return [normalized.join(" ")];
   return normalized;
 }

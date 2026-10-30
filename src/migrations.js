@@ -1,10 +1,14 @@
 "use strict";
 const { MAX_XP, createCurve } = require("./leveling");
+const { migrationV3 } = require("./migration-v3");
 function migrate(db) {
   const version = db.pragma("user_version", { simple: true });
-  if (version > 2)
+  if (version > 3)
     throw Error("This database was created by a newer Neox version.");
-  if (version >= 2) return;
+  if (version >= 2) {
+    migrationV3(db);
+    return;
+  }
   const curve = createCurve();
   db.transaction(() => {
     const invalid = db
@@ -47,5 +51,6 @@ function migrate(db) {
     }
     db.pragma("user_version = 2");
   }).immediate();
+  migrationV3(db);
 }
 module.exports = { migrate };

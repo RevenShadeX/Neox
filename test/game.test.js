@@ -6,7 +6,12 @@ const os = require("node:os");
 const path = require("node:path");
 const { Worker } = require("node:worker_threads");
 const { open, MAX } = require("../src/database");
-const { Game, GameError, commands, number } = require("../src/game");
+const {
+  Game,
+  GameError,
+  commands,
+  number,
+} = require("../test-support/legacy-game.cjs");
 const C = require("../src/content");
 const { definitions, parsePrefix, chunks } = require("../src/discord");
 const A = "100000000000000001",
@@ -19,7 +24,7 @@ function fixture(t, options = {}) {
   t.after(() => store.close());
   const run = (cmd, args = [], id = A, extra = {}) => {
     now += 2000;
-    return game.execute(cmd, args, { userId: id, ...extra });
+    return game.execute(cmd, args, { userId: id, guildId: "55555", ...extra });
   };
   return { store, game, run, tick: (ms) => (now += ms) };
 }
@@ -68,27 +73,28 @@ test("global accounts, aliases, bank deposits and withdrawals preserve funds", (
   assert.equal(f.game.player(A).wallet, 500);
   assert.match(f.run("cash", [], A, { guildId: "55555" }), /500/);
 });
-test("insufficient and overflow transfers roll back both accounts and history", (t) => {
+test("insufficient and overflow equipment payments roll back both accounts", (t) => {
   const f = fixture(t);
   fund(f);
   fund(f, B, MAX - 500);
+  f.game.giveGear(B, "sword1");
+  f.run("trade", [A, "1", "1"], B);
   const before = f.game.player(A).wallet;
-  assert.throws(() => f.run("pay", [B, "1"]), /limit/);
+  assert.throws(() => f.run("accept", ["1"]), /limit/);
   assert.equal(f.game.player(A).wallet, before);
   assert.equal(f.game.player(B).wallet, MAX);
-  assert.throws(() => f.run("pay", [B, String(MAX)]), /enough/);
+  assert.equal(f.game.gear(B, "1").user, B);
+  f.store.sql("UPDATE trades SET price=? WHERE id=1").run(MAX);
+  assert.throws(() => f.run("accept", ["1"]), /enough/);
   assert.equal(f.game.player(A).wallet, before);
 });
-test("payments are atomic and cannot create coins", (t) => {
+test("direct currency gifting is disabled without changing either player balance", (t) => {
   const f = fixture(t);
   f.run("cash");
   f.run("cash", [], B);
-  const total = 1000;
-  f.run("pay", [`<@${B}>`, "200"]);
-  assert.equal(f.game.player(A).wallet, 300);
-  assert.equal(f.game.player(B).wallet, 700);
-  assert.equal(f.game.player(A).wallet + f.game.player(B).wallet, total);
-  assert.throws(() => f.run("pay", [A, "10"]), /yourself/);
+  assert.throws(() => f.run("pay", [B, "200"]), /gifting is disabled/);
+  assert.equal(f.game.player(A).wallet, 500);
+  assert.equal(f.game.player(B).wallet, 500);
 });
 test("daily and weekly claims are persistent, repeatable only after cooldown", (t) => {
   const f = fixture(t);
@@ -106,9 +112,9 @@ test("daily and weekly claims are persistent, repeatable only after cooldown", (
 test("duplicate requests cannot replay payments even after command cooldown", (t) => {
   const f = fixture(t);
   f.run("cash", [], B);
-  f.run("pay", [B, "100"], A, { requestId: "900000000000000001" });
+  f.run("buy", ["food", "1"], A, { requestId: "900000000000000001" });
   assert.throws(
-    () => f.run("pay", [B, "100"], A, { requestId: "900000000000000001" }),
+    () => f.run("buy", ["food", "1"], A, { requestId: "900000000000000001" }),
     /already processed/,
   );
   assert.equal(f.game.player(A).wallet, 400);
@@ -134,7 +140,7 @@ test("animal selling keeps discoveries and all preserves one per stack", (t) => 
   f.game.animal(A, C.animals[0], 3);
   f.run("sellanimals", ["all"]);
   assert.equal(f.game.qty(A, "animal", "a001"), 1);
-  assert.equal(f.game.player(A).wallet, 524);
+  assert.equal(f.game.player(A).wallet, 500);
   assert.equal(
     f.store.sql("SELECT COUNT(*) AS n FROM discoveries WHERE user=?").get(A).n,
     1,
@@ -145,7 +151,7 @@ test("collection milestones are claimed once", (t) => {
   f.game.player(A);
   for (const a of C.animals.slice(0, 25)) f.game.animal(A, a, 1);
   f.run("collection", ["claim"]);
-  assert.equal(f.game.player(A).wallet, 4000);
+  assert.equal(f.game.player(A).wallet, 500);
   assert.equal(f.game.qty(A, "box", "animal"), 2);
   assert.throws(() => f.run("collection", ["claim"]), /No new/);
 });
@@ -203,7 +209,7 @@ test("loot boxes grant published guarantees and opening absent boxes changes not
   f.run("daily");
   const before = f.game.player(A).wallet;
   f.run("open", ["daily"]);
-  assert.ok(f.game.player(A).wallet >= before + 100);
+  assert.equal(f.game.player(A).wallet, before);
   assert.equal(f.game.qty(A, "box", "daily"), 0);
   assert.throws(() => f.run("open", ["daily"]), /enough/);
   assert.match(f.run("boxinfo", ["daily"]), /Guaranteed/);
@@ -376,7 +382,7 @@ test("concurrent connections cannot overspend the same wallet", async (t) => {
   g.player(A);
   g.player(B);
   s.close();
-  const source = `const {parentPort,workerData}=require('node:worker_threads');const {open}=require(workerData.root+'/src/database');const {Game}=require(workerData.root+'/src/game');const s=open(workerData.file);const g=new Game(s);try{g.execute('pay',[workerData.b,'400'],{userId:workerData.a});parentPort.postMessage('paid');}catch(e){parentPort.postMessage(e.message);}finally{s.close();}`;
+  const source = `const {parentPort,workerData}=require('node:worker_threads');const {open}=require(workerData.root+'/src/database');const {Game}=require(workerData.root+'/src/game');const s=open(workerData.file);const g=new Game(s);try{g.execute('buy',['food','4'],{userId:workerData.a});parentPort.postMessage('paid');}catch(e){parentPort.postMessage(e.message);}finally{s.close();}`;
   const result = await Promise.all(
     [1, 2, 3, 4].map(
       () =>
@@ -400,7 +406,7 @@ test("concurrent connections cannot overspend the same wallet", async (t) => {
   try {
     const p = new Game(check);
     assert.equal(p.player(A).wallet, 100);
-    assert.equal(p.player(B).wallet, 900);
+    assert.equal(p.player(B).wallet, 500);
   } finally {
     check.close();
   }
@@ -450,7 +456,7 @@ test("prefix and slash adapters call the same engine and enforce permissions", a
 test("payment cannot manufacture starting balances for arbitrary recipient IDs", (t) => {
   const f = fixture(t);
   f.run("cash");
-  assert.throws(() => f.run("pay", [B, "1"]), /Recipient must play/);
+  assert.throws(() => f.run("pay", [B, "1"]), /gifting is disabled/);
   assert.equal(f.game.player(A).wallet, 500);
   assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM players").get().n, 1);
 });

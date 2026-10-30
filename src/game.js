@@ -2,10 +2,7 @@
 const C = require("./content");
 const secure = require("./random");
 const { MAX } = require("./database");
-class GameError extends Error {}
-function assert(ok, message) {
-  if (!ok) throw new GameError(message);
-}
+const { GameError, assert } = require("./errors");
 function number(value, min = 1, max = MAX) {
   assert(
     typeof value === "string" && /^\d+$/.test(value),
@@ -32,6 +29,10 @@ const {
   alias,
   normalizeArguments,
 } = require("./commands");
+const { Economy } = require("./economy");
+const { Sessions } = require("./sessions");
+const { RoleShop } = require("./role-shop");
+const { Duels } = require("./duels");
 const { readMaxBet } = require("./config");
 const { Progression, readLevelingConfig } = require("./leveling");
 const { quests, advance: advanceQuest } = require("./quests");
@@ -54,12 +55,15 @@ class Game {
     this.clock = clock;
     this.maxBet = readMaxBet(String(maxBet));
     this.progression = new Progression(this, leveling);
+    this.economy = new Economy(this);
+    this.sessions = new Sessions(this);
+    this.roleShop = new RoleShop(this);
+    this.duels = new Duels(this);
   }
   player(id) {
-    this.sql("INSERT OR IGNORE INTO players(id,created) VALUES(?,?)").run(
-      id,
-      this.clock(),
-    );
+    this.sql(
+      "INSERT OR IGNORE INTO players(id,created,wallet) VALUES(?,?,0)",
+    ).run(id, this.clock());
     return this.sql("SELECT * FROM players WHERE id=?").get(id);
   }
   getPrefix(guild) {
@@ -71,24 +75,94 @@ class Game {
     );
   }
   money(id, delta, reason) {
+    if (delta > 0) return this.economy.mint(id, delta, reason);
+    if (delta < 0) return this.economy.spend(id, -delta, reason);
     assert(Number.isSafeInteger(delta), "Invalid currency operation.");
-    const result = this.sql(
-      "UPDATE players SET wallet=wallet+? WHERE id=? AND wallet+? BETWEEN 0 AND ?",
-    ).run(delta, id, delta, MAX);
+  }
+  requireAgreement(id) {
     assert(
-      result.changes === 1,
-      delta < 0 ? "Not enough Dark Coins." : "Wallet limit reached.",
+      this.sql("SELECT 1 FROM agreements WHERE user=?").get(id),
+      "Accept Neox rules first: use the Accept Rules button.",
+      "RULES_REQUIRED",
     );
-    this.sql("INSERT INTO ledger(user,delta,reason,at) VALUES(?,?,?,?)").run(
-      id,
-      delta,
-      reason,
-      this.clock(),
-    );
-    if (delta !== 0)
-      this.sql(
-        "INSERT INTO totals(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=MIN(1000000000000,value+excluded.value)",
-      ).run(delta > 0 ? "credits" : "debits", Math.abs(delta));
+  }
+  request(ctx, callback) {
+    assert(/^\d{5,22}$/.test(ctx.userId), "Invalid player identity.");
+    return this.db
+      .transaction(() => {
+        if (ctx.requestId) {
+          assert(/^\d{5,22}$/.test(ctx.requestId), "Invalid request ID.");
+          assert(
+            !this.sql("SELECT 1 FROM processed WHERE id=?").get(ctx.requestId),
+            "This command was already processed.",
+            "DUPLICATE",
+          );
+        }
+        const player = this.player(ctx.userId);
+        if (ctx.displayName)
+          this.sql(
+            "UPDATE players SET display_name=? WHERE id=? AND display_name!=?",
+          ).run(
+            cleanName(ctx.displayName),
+            player.id,
+            cleanName(ctx.displayName),
+          );
+        const result = callback(player);
+        if (ctx.requestId)
+          this.sql("INSERT INTO processed(id,at) VALUES(?,?)").run(
+            ctx.requestId,
+            this.clock(),
+          );
+        return result;
+      })
+      .immediate();
+  }
+  complete(name, args, player, ctx) {
+    const previous = this.mintScope;
+    this.mintScope = name;
+    try {
+      const raw = this.run(name, args, player, ctx),
+        result = typeof raw === "string" ? { content: raw } : raw;
+      if (result.completed !== false) {
+        advanceQuest(this, player.id, name);
+        this.mintScope = "level";
+        const xp = this.progression.award(
+          player.id,
+          name,
+          name === "quest" ? result.completedQuests || 0 : 1,
+        );
+        result.globalXP = xp.awarded;
+        if (xp.levelUp) {
+          const settings =
+            ctx.guildId &&
+            this.sql("SELECT level_announcements FROM guilds WHERE id=?").get(
+              ctx.guildId,
+            );
+          result.levelUp = {
+            ...xp.levelUp,
+            public: settings?.level_announcements !== 0,
+          };
+        }
+      }
+      return result;
+    } finally {
+      this.mintScope = previous;
+    }
+  }
+  interact(customId, input, ctx) {
+    return this.request(ctx, () => {
+      const m = /^nx:([a-f0-9]{24}):(\d{1,6}):([a-z]+)$/.exec(customId);
+      assert(m, "Invalid component ID.");
+      return this.sessions.handle(ctx, m[1], Number(m[2]), m[3], input);
+    });
+  }
+  duelAction(id, action, ctx) {
+    return this.request(ctx, () => {
+      this.requireAgreement(ctx.userId);
+      return action === "cancel"
+        ? this.duels.cancel(ctx, id)
+        : this.duels.respond(ctx, id, action);
+    });
   }
   qty(id, kind, item) {
     return (
@@ -221,55 +295,13 @@ class Game {
       args.every((a) => a.length <= 100),
       "Argument too long.",
     );
-    assert(/^\d{5,22}$/.test(ctx.userId), "Invalid player identity.");
-    return this.db
-      .transaction(() => {
-        const now = this.clock();
-        if (ctx.requestId) {
-          assert(/^\d{5,22}$/.test(ctx.requestId), "Invalid request ID.");
-          assert(
-            !this.sql("SELECT 1 FROM processed WHERE id=?").get(ctx.requestId),
-            "This command was already processed.",
-          );
-        }
-        const p = this.player(ctx.userId);
-        this.cooldown(p.id, "command", 1000);
-        if (ctx.displayName)
-          this.sql(
-            "UPDATE players SET display_name=? WHERE id=? AND display_name!=?",
-          ).run(cleanName(ctx.displayName), p.id, cleanName(ctx.displayName));
-        if (!["help", "rules", "agree", "decline"].includes(name))
-          assert(this.sql("SELECT 1 FROM agreements WHERE user=?").get(p.id),
-            "Accept Neox rules first: use n rules, then n agree.");
-        const rawResult = this.run(name, args, p, ctx);
-        const result =
-          typeof rawResult === "string" ? { content: rawResult } : rawResult;
-        advanceQuest(this, p.id, name);
-        const xp = this.progression.award(
-          p.id,
-          name,
-          name === "quest" ? result.completedQuests || 0 : 1,
-        );
-        result.globalXP = xp.awarded;
-        if (xp.levelUp) {
-          const settings =
-            ctx.guildId &&
-            this.sql("SELECT level_announcements FROM guilds WHERE id=?").get(
-              ctx.guildId,
-            );
-          result.levelUp = {
-            ...xp.levelUp,
-            public: settings?.level_announcements !== 0,
-          };
-        }
-        if (ctx.requestId)
-          this.sql("INSERT INTO processed(id,at) VALUES(?,?)").run(
-            ctx.requestId,
-            now,
-          );
-        return result;
-      })
-      .immediate();
+    return this.request(ctx, (player) => {
+      if (!["help", "rules", "agree", "decline", "refunds"].includes(name))
+        this.requireAgreement(player.id);
+      if (!["rules", "agree", "decline"].includes(name))
+        this.cooldown(player.id, "command", 1000);
+      return this.complete(name, args, player, ctx);
+    });
   }
   xpLeaderboard(arg) {
     const page = arg ? number(arg, 1, 100000) : 1;
@@ -288,42 +320,90 @@ class Game {
     };
     switch (name) {
       case "rules":
-        return "NEOX RULES • Dark Coins are virtual, have no cash value, and cannot be redeemed or purchased for real money. Games involve random outcomes; winnings are not guaranteed. No exploits, automation abuse, or trading for real money. Respect Discord rules. Accept with n agree or decline with n decline.";
+        return this.sessions.create("rules", ctx);
       case "agree":
-        this.sql("INSERT OR IGNORE INTO agreements(user,accepted_at) VALUES(?,?)").run(id, this.clock());
-        return "Neox rules accepted. Your global game account is unlocked.";
-      case "decline":
+        this.sql(
+          "INSERT OR IGNORE INTO agreements(user,accepted_at) VALUES(?,?)",
+        ).run(id, this.clock());
+        return "Neox rules accepted globally. Your account is unlocked in every server.";
+      case "decline": {
         this.sql("DELETE FROM agreements WHERE user=?").run(id);
-        return "Rules declined. Gameplay is locked until you accept with n agree.";
-      case "duel": {
-        assert(ctx.guildId, "Dice duels are only available in servers.");
-        if (a[0] === "accept" || a[0] === "decline") {
-          const challenge = this.sql("SELECT * FROM dice_duels WHERE guild=? AND opponent=? AND expires>?").get(ctx.guildId,id,this.clock());
-          assert(challenge, "No active dice duel challenge for you in this server.");
-          this.sql("DELETE FROM dice_duels WHERE id=?").run(challenge.id);
-          if (a[0] === "decline") return "Dice duel declined.";
-          assert(this.sql("SELECT 1 FROM agreements WHERE user=?").get(challenge.challenger), "Challenger must accept the rules.");
-          const challenger = this.sql("SELECT wallet FROM players WHERE id=?").get(challenge.challenger);
-          const opponent = this.sql("SELECT wallet FROM players WHERE id=?").get(id);
-          assert(challenger.wallet >= challenge.wager && opponent.wallet >= challenge.wager, "Both players need enough Dark Coins.");
-          const rollA = this.rng.int(1,6), rollB = this.rng.int(1,6);
-          if (rollA === rollB) return `🎲 Tie! <@${challenge.challenger}> rolled ${rollA}; <@${id}> rolled ${rollB}. No coins moved.`;
-          const winner = rollA > rollB ? challenge.challenger : id;
-          const loser = rollA > rollB ? id : challenge.challenger;
-          this.money(loser, -challenge.wager, "dice duel loss");
-          this.money(winner, challenge.wager, "dice duel win");
-          return `🎲 <@${challenge.challenger}> rolled ${rollA} • <@${id}> rolled ${rollB}. <@${winner}> wins ${fmt(challenge.wager)} Dark Coins from <@${loser}>!`;
+        const active = this.sql("SELECT * FROM duel_presence WHERE user=?").get(
+          id,
+        );
+        if (active) {
+          this.duels.cancel({ ...ctx, guildId: active.guild });
         }
-        assert(ctx.targetGuildMember !== false, "Challenge a member of this server.");
-        const opponent = userId(a[0]);
-        assert(opponent !== id, "You cannot duel yourself.");
-        assert(this.sql("SELECT 1 FROM agreements WHERE user=?").get(opponent), "That player must accept Neox rules first.");
-        const wager = n(a[1],1,this.maxBet);
-        assert(p.wallet >= wager, "Not enough Dark Coins.");
-        this.sql("DELETE FROM dice_duels WHERE guild=? AND opponent=? AND expires<=?").run(ctx.guildId,opponent,this.clock());
-        assert(!this.sql("SELECT 1 FROM dice_duels WHERE guild=? AND opponent=?").get(ctx.guildId,opponent), "That player already has a pending challenge.");
-        this.sql("INSERT INTO dice_duels(guild,challenger,opponent,wager,expires) VALUES(?,?,?,?,?)").run(ctx.guildId,id,opponent,wager,this.clock()+120000);
-        return `🎲 <@${id}> challenges <@${opponent}> to a ${fmt(wager)} Dark Coin dice duel! <@${opponent}>: use n duel accept or n duel decline within 2 minutes. Higher roll wins; ties refund both.`;
+        return "Rules declined. Gameplay is locked until you accept the rules.";
+      }
+      case "pay":
+        assert(
+          false,
+          "Direct Dark Coin gifting is disabled. Equipment trades remain available.",
+        );
+        break;
+      case "weekly":
+        this.cooldown(id, "weekly", 604800000);
+        this.item(id, "box", "gem", 2);
+        return "Weekly supplies: two gem boxes. No Dark Coins created.";
+      case "work":
+        this.cooldown(id, "work", 3600000);
+        this.item(id, "food", "food", 3);
+        return "Work completed: three Companion Rations. No Dark Coins created.";
+      case "treasury": {
+        if (a.length) {
+          assert(
+            a[0] === "fund" && a.length === 2,
+            "Usage: treasury [fund amount]",
+          );
+          const amount = n(a[1]);
+          this.economy.spend(id, amount, "voluntary treasury funding");
+          return `Moved ${fmt(amount)} existing Dark Coins to the shared gambling treasury. This contribution is not refundable.`;
+        }
+        return `Global gambling treasury: ${fmt(this.economy.treasury())} Dark Coins. Starts at zero; funded only by existing coins from purchases, costs and voluntary contributions. No real-world value.`;
+      }
+      case "refunds":
+        return `Returned ${fmt(this.roleShop.claimRefund(id))} held refund Dark Coins to your wallet.`;
+      case "roleshop":
+        assert(ctx.guildId, "Use this in a server.");
+        assert(
+          this.roleShop.enabled(ctx.guildId),
+          "This server role shop is disabled.",
+        );
+        return this.sessions.create("roleshop", ctx, {
+          page: 0,
+          stage: "browse",
+        });
+      case "roleshopadmin":
+        assert(
+          ctx.guildId && ctx.manageGuild && ctx.manageRoles,
+          "Manage Server and Manage Roles permissions are required.",
+        );
+        return this.sessions.create("roleadmin", ctx, {
+          page: 0,
+          stage: "browse",
+        });
+      case "rolepurchases": {
+        const rows = this.sql(
+          "SELECT id,role,price,status FROM role_purchases WHERE buyer=? AND guild=? ORDER BY created DESC LIMIT 10",
+        ).all(id, ctx.guildId);
+        return (
+          rows
+            .map(
+              (r) =>
+                `${r.id} • <@&${r.role}> • ${fmt(r.price)} Dark Coins • ${r.status}`,
+            )
+            .join("\n") || "No recent role purchases in this server."
+        );
+      }
+      case "duel": {
+        if (["accept", "decline"].includes(a[0]))
+          return this.duels.respond(ctx, this.duels.current(ctx), a[0]);
+        if (a[0] === "cancel") return this.duels.cancel(ctx);
+        const wager = n(a[1], 1, this.maxBet);
+        return a[0] === "random"
+          ? this.duels.join(ctx, wager)
+          : this.duels.create(ctx, userId(a[0]), wager);
       }
       case "help": {
         if (a[0]) {
@@ -380,7 +460,17 @@ class Game {
         )
           .safeIntegers(true)
           .get();
-        return `${fmt(t.players)} players • ${fmt(t.wallet)} wallet Dark Coins • ${fmt(t.bank)} bank Dark Coins\nVirtual currency only. Transfers do not create currency.`;
+        const held = this.sql(
+          "SELECT COALESCE(SUM(price),0) AS n FROM role_purchases WHERE status IN('pending','assigning','uncertain')",
+        )
+          .safeIntegers(true)
+          .get().n;
+        const refunds = this.sql(
+          "SELECT COALESCE(SUM(amount),0) AS n FROM refund_credits",
+        )
+          .safeIntegers(true)
+          .get().n;
+        return `${fmt(t.players)} players • ${fmt(t.wallet)} wallet Dark Coins • ${fmt(t.bank)} bank Dark Coins\nTreasury: ${fmt(this.economy.treasury())} • role escrow: ${fmt(held)} • held refunds: ${fmt(refunds)}\nNew coins: daily, monster hunting and global levels only. No real-world value.`;
       }
       case "leaderboard": {
         const mode = a[0] || "wealth";
@@ -468,23 +558,22 @@ class Game {
       case "animals": {
         if (a[0]?.startsWith("a")) {
           const x = find(C.animals, a[0]);
-          return `${x.id} • ${x.name}\n${x.rarity} • ${x.category} • ${x.value} Dark Coins\nBase hunt probability per draw: ${((C.weights[x.tier] / C.weights.reduce((s, w) => s + w, 0) / 25) * 100).toFixed(6)}%\nAttribute: ${x.attribute || "none"}. Migration doubles habitat weight within its tier; active gems and equipment modify normalized tier weights.`;
+          return `${x.id} • ${x.name}\n${x.rarity} • ${x.category} • ${x.value} threat score\nBase hunt probability per draw: ${((C.weights[x.tier] / C.weights.reduce((s, w) => s + w, 0) / 25) * 100).toFixed(6)}%\nAttribute: ${x.attribute || "none"}. Migration doubles habitat weight within its tier; active gems and equipment modify normalized tier weights.`;
         }
         return this.page(
           C.animals.map(
-            (x) => `${x.id} ${x.name} [${x.rarity}] • ${x.value} dc`,
+            (x) => `${x.id} ${x.name} [${x.rarity}] • ${x.value} threat`,
           ),
           a[0],
         );
       }
       case "sellanimals": {
-        assert(a[0], "Usage: sellanimals animal-id|all [quantity]");
+        assert(a[0], "Usage: sellmonsters monster-id|all [quantity]");
         assert(
           a[0] !== "all" || !a[1],
-          "Use sellanimals all without a quantity.",
+          "Use sellmonsters all without a quantity.",
         );
-        let total = 0,
-          count = 0;
+        let count = 0;
         const rows =
           a[0] === "all"
             ? this.sql(
@@ -506,10 +595,9 @@ class Game {
           if (!quantity) continue;
           const x = find(C.animals, row.item);
           this.item(id, "animal", x.id, -quantity);
-          total += quantity * x.value;
           count += quantity;
         }
-        assert(count > 0, "No animals to sell (all keeps one of each).");
+        assert(count > 0, "No monsters to sell (all keeps one of each).");
         // Releasing duplicates does not mint new Dark Coins.
         return `Released ${fmt(count)} duplicate monsters. No Dark Coins created.`;
       }
@@ -520,7 +608,7 @@ class Game {
         const count = this.sql(
           "SELECT COUNT(*) AS n FROM discoveries WHERE user=?",
         ).get(id).n;
-        let reward = 0;
+        let milestones = 0;
         if (a[0] === "claim") {
           for (const goal of [10, 25, 50, 100, 150, 200])
             if (count >= goal) {
@@ -528,21 +616,24 @@ class Game {
                 "INSERT OR IGNORE INTO claims(user,key) VALUES(?,?)",
               ).run(id, `collection${goal}`);
               if (result.changes) {
-                reward += goal * 100;
+                milestones++;
                 this.item(id, "box", goal >= 100 ? "legendary" : "animal", 1);
               }
             }
-          assert(reward > 0, "No new completion rewards available.");
+          assert(milestones > 0, "No new completion rewards available.");
           // Collection milestones award boxes only, not currency.
         }
-        return `${count}/200 species discovered forever (selling does not erase discoveries).\nMilestones: 10, 25, 50, 100, 150, 200; each grants a box.\n${reward ? `Claimed milestone boxes.` : "Use collection claim to collect unlocked rewards."}`;
+        return `${count}/200 species discovered forever (selling does not erase discoveries).\nMilestones: 10, 25, 50, 100, 150, 200; each grants a box.\n${milestones ? `Claimed milestone boxes.` : "Use collection claim to collect unlocked rewards."}`;
       }
       case "inventory": {
         const rows = this.sql(
           "SELECT kind,item,qty FROM inventory WHERE user=? ORDER BY kind,item",
         )
           .all(id)
-          .map((r) => `${r.kind} • ${r.item} ×${fmt(r.qty)}`);
+          .map(
+            (r) =>
+              `${r.kind === "animal" ? "monster" : r.kind} • ${r.item} ×${fmt(r.qty)}`,
+          );
         rows.push(
           ...this.sql("SELECT * FROM gear WHERE user=? ORDER BY id")
             .all(id)
@@ -653,19 +744,12 @@ class Game {
           .join("\nversus\n");
       }
       case "shop": {
-        const rows = [
-          ...C.boxes.map((b) => `${b.id} box • ${b.price} dc`),
-          ...C.gems.map(
-            (g) =>
-              `${g.id} • ${g.price} dc • +${Math.round(g.bonus * 100)}%, ${g.uses} hunts / ${g.duration / 3600000}h`,
-          ),
-          ...C.equipment.map(
-            (e) =>
-              `${e.id} • ${e.price} dc • ${e.rarity} • ATK ${e.attack}, DEF ${e.defense}, ${e.ability}`,
-          ),
-          "food • 100 dc • +20 pet XP",
-        ];
-        return this.page(rows, a[0]);
+        const page = a[0] ? n(a[0], 1, 100) - 1 : 0;
+        return this.sessions.create("shop", ctx, {
+          category: "gems",
+          page: Math.min(page, 1),
+          stage: "browse",
+        });
       }
       case "buy": {
         const quantity = a[1] ? n(a[1], 1, 50) : 1;
@@ -691,7 +775,7 @@ class Game {
             item.id,
             quantity,
           );
-        return `Bought ${quantity} ${item.id} for ${fmt(item.price * quantity)} Dark Coins.`;
+        return `Bought ${quantity} ${item.name || item.id} for ${fmt(item.price * quantity)} Dark Coins.`;
       }
       case "sell": {
         const g = this.gear(id, a[0]);
@@ -710,7 +794,10 @@ class Game {
         return (
           this.sql("SELECT item,qty FROM inventory WHERE user=? AND kind='box'")
             .all(id)
-            .map((b) => `${b.item} ×${b.qty}`)
+            .map(
+              (b) =>
+                `${C.boxes.find((x) => x.id === b.item)?.name || b.item} ×${b.qty}`,
+            )
             .join("\n") || "No boxes. Claim daily or visit shop."
         );
       case "boxinfo": {
@@ -718,7 +805,7 @@ class Game {
         const tierTotal = b.tierWeights
           .slice(b.minTier || 0, b.maxTier + 1)
           .reduce((s, w) => s + w, 0);
-        return `${b.id} box • ${b.price} dc\nGuaranteed ${b.coins[0]}–${b.coins[1]} Dark Coins + ${b.quantity[0]}–${b.quantity[1]} independent reward rolls (uniform).\nEach roll: ${b.drops.map(([k, w]) => `${k} ${w}%`).join(", ")}.\nAnimal/equipment rarity: ${b.tierWeights
+        return `${b.name} (${b.id}) • ${b.price} dc\nGuaranteed ${b.quantity[0]}–${b.quantity[1]} independent reward rolls (uniform).\nEach roll: ${b.drops.map(([k, w]) => `${k === "animal" ? "monster" : k} ${w}%`).join(", ")}.\nMonster/equipment rarity: ${b.tierWeights
           .slice(b.minTier || 0, b.maxTier + 1)
           .map(
             (w, i) =>
@@ -741,8 +828,7 @@ class Game {
                   qty: this.qty(id, "box", a[0]),
                 },
               ];
-        let opened = 0,
-          coins = 0;
+        let opened = 0;
         const rewards = new Map();
         const add = (s) => rewards.set(s, (rewards.get(s) || 0) + 1);
         for (const row of rows) {
@@ -758,7 +844,6 @@ class Game {
           if (!quantity) continue;
           this.item(id, "box", b.id, -quantity);
           for (let i = 0; i < quantity; i++) {
-            coins += this.rng.int(...b.coins);
             for (
               let j = 0, rolls = this.rng.int(...b.quantity);
               j < rolls;
@@ -788,7 +873,7 @@ class Game {
                     C.animals.filter((x) => x.tier === tier),
                   );
                   this.animal(id, animal, 1);
-                  add(animal.id);
+                  add(`${animal.id} ${animal.name}`);
                 } else {
                   const e = this.rng.pick(
                     C.equipment.filter(
@@ -962,8 +1047,7 @@ class Game {
         const g = this.gear(t.seller, String(t.gear));
         assert(!g.slot, "Item is equipped.");
         assert(this.gearCount(id) < 200, "Equipment inventory full.");
-        this.money(id, -t.price, `trade ${t.id}`);
-        this.money(t.seller, t.price, `trade ${t.id}`);
+        this.economy.transfer(id, t.seller, t.price, `trade ${t.id}`);
         this.sql("DELETE FROM trades WHERE id=?").run(t.id);
         this.sql("UPDATE gear SET user=? WHERE id=?").run(id, t.gear);
         return `Trade #${t.id} complete. Received gear #${t.gear} for ${fmt(t.price)} Dark Coins.`;
@@ -977,6 +1061,7 @@ class Game {
         return "Trade cancelled.";
       }
       case "cf": {
+        if (!a.length) return this.sessions.create("coinflip", ctx);
         const side = { h: "h", heads: "h", t: "t", tails: "t" }[a[1]];
         assert(
           side === "h" || side === "t",
@@ -991,16 +1076,17 @@ class Game {
         const wager = n(String(requested), 1, this.maxBet);
         assert(wager <= p.wallet, "Not enough Dark Coins.");
         this.cooldown(id, "gamble", 5000);
-        this.money(id, -wager, "coinflip wager");
-        // Production uses exactly crypto.randomInt(2); injected RNG supports tests.
-        const result = (
-          this.rng.coinflip ? this.rng.coinflip() : this.rng.int(0, 1)
-        )
-          ? "h"
-          : "t";
-        const won = result === side;
-        const payout = won ? wager * 2 : 0;
-        if (payout) this.money(id, payout, "coinflip payout");
+        const settled = this.economy.gamble(id, wager, 2, "coinflip", () => {
+          const sideResult = (
+            this.rng.coinflip ? this.rng.coinflip() : this.rng.int(0, 1)
+          )
+            ? "h"
+            : "t";
+          return { side: sideResult, multiplier: sideResult === side ? 2 : 0 };
+        });
+        const result = settled.side,
+          won = result === side,
+          payout = settled.payout;
         this.sql(
           "UPDATE players SET coinflips=coinflips+1,coinflip_wins=coinflip_wins+? WHERE id=?",
         ).run(won ? 1 : 0, id);
@@ -1019,33 +1105,40 @@ class Game {
         return response;
       }
       case "dice": {
-        const choice = { h: "high", high: "high", l: "low", low: "low" }[a[1]];
+        const choice = ["h", "high"].includes(a[1])
+          ? "high"
+          : ["l", "low"].includes(a[1])
+            ? "low"
+            : null;
         assert(choice, "Usage: dice amount|all|half high|low");
-        const requested = a[0] === "all" ? Math.min(p.wallet, this.maxBet)
-          : a[0] === "half" ? Math.min(Math.floor(p.wallet / 2), this.maxBet) : a[0];
+        const requested =
+          a[0] === "all"
+            ? Math.min(p.wallet, this.maxBet)
+            : a[0] === "half"
+              ? Math.min(Math.floor(p.wallet / 2), this.maxBet)
+              : a[0];
         const wager = n(String(requested), 1, this.maxBet);
-        assert(wager <= p.wallet, "Not enough Dark Coins.");
         this.cooldown(id, "gamble", 5000);
-        this.money(id, -wager, "dice wager");
-        const roll = this.rng.int(1, 6);
-        const result = roll >= 4 ? "high" : "low";
-        const won = choice === result;
-        if (won) this.money(id, wager * 2, "dice payout");
-        return `🎲 Dice rolled **${roll}** (${result.toUpperCase()}). You chose ${choice.toUpperCase()}.
-${won ? `Won ${fmt(wager)}` : `Lost ${fmt(wager)}`} Dark Coins.`;
+        const settled = this.economy.gamble(id, wager, 2, "dice", () => {
+          const roll = this.rng.int(1, 6),
+            result = roll >= 4 ? "high" : "low";
+          return { roll, result, multiplier: choice === result ? 2 : 0 };
+        });
+        return `🎲 Rolled ${settled.roll} (${settled.result.toUpperCase()}). ${settled.multiplier ? "Won" : "Lost"} ${fmt(wager)} Dark Coins net. High 4–6 / low 1–3: 50% each; total winning payout 2×, loss 0.`;
       }
       case "slots": {
-        assert(a.length === 1, "Usage: slots amount");
-        this.cooldown(id, "gamble", 5000);
         const wager = n(a[0], 1, this.maxBet);
-        this.money(id, -wager, "slots wager");
-        const reels = [0, 0, 0].map(() => this.rng.int(0, 5));
-        const symbols = ["🌑", "🔮", "🦋", "💎", "⚔️", "👑"];
-        const triple = reels.every((v) => v === reels[0]);
-        const pair = new Set(reels).size === 2;
-        const multiplier = triple ? 10 : pair ? 1 : 0;
-        if (multiplier) this.money(id, wager * multiplier, "slots payout");
-        return `${reels.map((r) => symbols[r]).join(" ")}\n${multiplier ? `Returned ${fmt(wager * multiplier)}` : "No payout"} Dark Coins. Net ${fmt(wager * (multiplier - 1))}.\n216 equiprobable outcomes: triple 6/216 pays 10×; exactly one pair 90/216 returns 1×; other 120/216 pays 0. RTP 69.44%. Virtual currency only.`;
+        this.cooldown(id, "gamble", 5000);
+        const settled = this.economy.gamble(id, wager, 10, "slots", () => {
+          const reels = [0, 0, 0].map(() => this.rng.int(0, 5));
+          const multiplier = reels.every((r) => r === reels[0])
+            ? 10
+            : new Set(reels).size === 2
+              ? 1
+              : 0;
+          return { reels, multiplier };
+        });
+        return `${settled.reels.map((r) => ["🌑", "🔮", "🦇", "💎", "⚔️", "👑"][r]).join(" ")}\nReturned ${fmt(settled.payout)} Dark Coins; net ${fmt(settled.payout - wager)}. 216 equiprobable outcomes: triple 6/216 pays 10×; pair 90/216 returns 1×; other 120/216 pays 0. RTP 69.44%. All payouts treasury-backed.`;
       }
       case "prefix": {
         assert(ctx.guildId, "Use this in a server.");
@@ -1129,7 +1222,7 @@ ${won ? `Won ${fmt(wager)}` : `Lost ${fmt(wager)}`} Dark Coins.`;
           return `Daily quests • reset at 00:00 UTC\n${quests
             .map((q) => {
               const state = rows.find((r) => r.kind === q.id);
-              return `${q.id}: ${q.name} • ${state?.progress || 0}/${q.goal} • ${q.coins} Dark Coins + ${this.progression.config.rewards.quest} global XP${state?.claimed ? " [claimed]" : ""}`;
+              return `${q.id}: ${q.name} • ${state?.progress || 0}/${q.goal} • ${this.progression.config.rewards.quest} global XP${state?.claimed ? " [claimed]" : ""}`;
             })
             .join("\n")}\nUse quest claim hunt|cf|battle|all.`;
         assert(
@@ -1161,7 +1254,7 @@ ${won ? `Won ${fmt(wager)}` : `Lost ${fmt(wager)}`} Dark Coins.`;
       }
       case "event": {
         const e = this.currentEvent();
-        return `${e.name}: ${e.category} animals receive double habitat weight within each rarity tier until ${new Date(e.ends).toISOString()}. Event gem bonuses add to rare tier weights. Tier odds remain normalized.`;
+        return `${e.name}: ${e.category} monsters receive double habitat weight within each rarity tier until ${new Date(e.ends).toISOString()}. Event gem bonuses add to rare tier weights. Tier odds remain normalized.`;
       }
       default:
         throw Error("Missing command implementation");

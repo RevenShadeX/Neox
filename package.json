@@ -6,13 +6,15 @@
   "main": "src/index.js",
   "type": "commonjs",
   "engines": {
-    "node": ">=22.12"
+    "node": "24.x"
   },
   "scripts": {
     "start": "node src/index.js",
     "register": "node scripts/register.js",
     "test": "node --test",
-    "check": "node scripts/check.js"
+    "check": "node scripts/check.js",
+    "syntax": "node scripts/syntax.js",
+    "storage": "node scripts/storage-audit.js"
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.100",

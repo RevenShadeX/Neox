@@ -8,11 +8,15 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const budget = 1024 * 1024 * 1024;
 const warning = Math.floor(budget * 0.7);
-const database = path.resolve(process.env.DATABASE_PATH || path.join(root, "data/neox.sqlite"));
+const database = path.resolve(
+  process.env.DATABASE_PATH || path.join(root, "data/neox.sqlite"),
+);
 const seen = new Set();
 function sizeOf(target) {
   let info;
-  try { info = fs.lstatSync(target); } catch (error) {
+  try {
+    info = fs.lstatSync(target);
+  } catch (error) {
     if (error.code === "ENOENT") return 0;
     throw error;
   }
@@ -28,8 +32,18 @@ function sizeOf(target) {
     total += sizeOf(path.join(target, entry));
   return total;
 }
-function fmt(bytes) { return (bytes / 1048576).toFixed(2) + " MiB"; }
-const paths = ["src", "scripts", "assets", "node_modules", "data", "logs", "backups"];
+function fmt(bytes) {
+  return (bytes / 1048576).toFixed(2) + " MiB";
+}
+const paths = [
+  "src",
+  "scripts",
+  "assets",
+  "node_modules",
+  "data",
+  "logs",
+  "backups",
+];
 let total = 0;
 console.log("Neox read-only storage audit");
 for (const name of paths) {
@@ -37,7 +51,8 @@ for (const name of paths) {
   total += bytes;
   console.log(name.padEnd(15) + fmt(bytes));
 }
-const includedDb = database === path.join(root, "data/neox.sqlite") ||
+const includedDb =
+  database === path.join(root, "data/neox.sqlite") ||
   database.startsWith(path.join(root, "data") + path.sep);
 if (!includedDb) {
   for (const suffix of ["", "-wal", "-shm"]) {
@@ -51,4 +66,6 @@ if (total >= warning) {
   console.warn("WARNING: tracked files exceed 70% of the 1 GiB budget.");
   process.exitCode = 2;
 }
-console.log("Note: this measures selected project paths, not filesystem free space or other host files.");
+console.log(
+  "Note: this measures selected project paths, not filesystem free space or other host files.",
+);
