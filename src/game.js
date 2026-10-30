@@ -561,13 +561,17 @@ class Game {
         const rows = this.sql(
           "SELECT item,qty FROM inventory WHERE user=? AND kind='animal' ORDER BY item",
         ).all(id);
-        return this.page(
-          rows.map((r) => {
-            const x = find(C.animals, r.item);
-            return `${x.id} ${x.name} [${x.rarity}] ×${fmt(r.qty)}`;
-          }),
-          a[0],
-        );
+        const groups = C.rarities.map((rarity) => ({ rarity, rows: [] }));
+        for (const r of rows) {
+          const animal = find(C.animals, r.item);
+          groups[animal.tier].rows.push(`${animal.id} • ${animal.name} ×${fmt(r.qty)}`);
+        }
+        const lines = [];
+        for (let i = groups.length - 1; i >= 0; i--) {
+          if (!groups[i].rows.length) continue;
+          lines.push(`**✦ ${groups[i].rarity.toUpperCase()}**`, ...groups[i].rows, "");
+        }
+        return `**NEOX • MONSTER COLLECTION**\n${this.page(lines, a[0], 16)}`;
       }
       case "animals": {
         if (a[0]?.startsWith("a")) {
