@@ -320,6 +320,7 @@ const cardStyles = {
   zoo: ["🐾 Monster Collection", 0x10b981], animals: ["📖 Monster Bestiary", 0x10b981],
   collection: ["🏅 Collection Milestones", 0x10b981], huntstats: ["🎯 Hunting Statistics", 0x10b981],
   gems: ["💎 Your Gems", 0x8b5cf6], equipment: ["⚔️ Your Equipment", 0x8b5cf6],
+  weapons: ["🗡️ Weapon Collection", 0x8b5cf6], armors: ["🛡️ Armor Collection", 0x8b5cf6],
   boxes: ["📦 Your Loot Boxes", 0x8b5cf6], boxinfo: ["📦 Loot Box Details", 0x8b5cf6],
   pet: ["🐾 Your Companion", 0x10b981], history: ["🧾 Transaction History", 0x64748b],
 };

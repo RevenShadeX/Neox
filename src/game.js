@@ -149,7 +149,7 @@ class Game {
       }
       if (!result.presentation && [
         "inventory", "leaderboard", "levels", "zoo", "animals", "collection",
-        "huntstats", "gems", "boxes", "boxinfo", "equipment", "pet", "history",
+        "huntstats", "gems", "boxes", "boxinfo", "equipment", "weapons", "armors", "pet", "history",
       ].includes(name)) result.presentation = { kind: "card", command: name };
       return result;
     } finally {
