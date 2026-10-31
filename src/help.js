@@ -7,7 +7,7 @@ const categories = [
   ["coins", "🪙 Wallet & economy", ["cash", "deposit", "withdraw", "history", "economy"]],
   ["hunting", "🐾 Hunting & monsters", ["hunt", "zoo", "animals", "sellanimals", "huntstats", "collection", "event"]],
   ["items", "🎒 Items & shopping", ["inventory", "shop", "buy", "sell", "gems", "activate", "boxes", "open", "boxinfo"]],
-  ["gear", "⚔️ Equipment & crafting", ["equipment", "equip", "unequip", "compare", "craft", "upgrade", "enhance"]],
+  ["gear", "⚔️ Equipment & crafting", ["equipment", "weapons", "equip", "unequip", "compare", "craft", "upgrade", "enhance"]],
   ["combat", "👹 Battles & companions", ["battle", "boss", "pet", "feed", "quest"]],
   ["games", "🎲 Games & duels", ["cf", "dice", "slots", "duel"]],
   ["progress", "🏆 Profiles & rankings", ["profile", "level", "rank", "levels", "leaderboard", "levelrewards"]],

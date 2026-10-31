@@ -788,6 +788,18 @@ class Game {
         this.sql("UPDATE gear SET enhance=enhance+1 WHERE id=?").run(g.id);
         return `Enhanced #${g.id} to +${g.enhance + 1}. Guaranteed success.`;
       }
+      case "weapons": {
+        const owned = this.sql("SELECT id,item,slot FROM gear WHERE user=? ORDER BY id").all(id);
+        const weapons = C.equipment.filter((item) => item.slot === "weapon");
+        const lines = weapons.map((item) => {
+          const copies = owned.filter((gear) => gear.item === item.id);
+          const state = copies.length
+            ? "OWNED x" + copies.length + " • " + copies.map((gear) => "#" + gear.id + (gear.slot ? " equipped" : "")).join(", ")
+            : "NOT OWNED";
+          return item.name + " [" + item.rarity + "] • " + state;
+        });
+        return "**WEAPON COLLECTION**\n" + this.page(lines, undefined, 100) + "\n\nUse n equip gear-id to equip an owned weapon.";
+      }
       case "equipment": {
         const s = this.stats(id);
         return `Attack ${s.attack} • Defense ${s.defense}\n${s.rows.map((g) => `#${g.id} ${g.item} L${g.level} +${g.enhance} [${g.slot}]${g.slot === "armor" ? ` • Infused +${this.sql("SELECT defense FROM armor_infusions WHERE gear=?").get(g.id)?.defense || 0}/200 DEF` : ""}`).join("\n") || "No equipment."}\nAbilities: ${s.abilities.join(", ") || "none"}\nUpgrades: xp1 + 250 × tier × current level Dark Coins. Enhancement: lucky1 × next enhancement + 500 × next enhancement Dark Coins. Craft: currency1 × max(1, rarity index) + 70% shop price.`;
@@ -858,6 +870,9 @@ class Game {
         return `🛍️ Bought ${quantity} ${item.name || item.id} for **${fmt(item.price * quantity)} Dark Coins**.\n🎒 Added to your inventory.`;
       }
       case "sell": {
+        if (a[0] === "all" || C.rarities.some((r) => r.toLowerCase() === a[0]) ||
+            C.animals.some((animal) => animal.id === a[0]))
+          return this.run("sellanimals", a, p, ctx);
         const g = this.gear(id, a[0]);
         assert(!g.slot, "Unequip the item first.");
         assert(!this.locked(g.id), "Cancel the trade offer first.");
