@@ -27,6 +27,7 @@ function fixture(options = {}) {
   const ctx = {
     userId: A,
     guildId: "55555",
+    channelId: "77777",
     manageGuild: true,
     manageRoles: true,
     memberIds: [A, B],
@@ -120,6 +121,7 @@ for (const [content, canonical] of requestedOther)
     }
   });
 const validArgs = {
+  disable: [], enable: [],
   ping: [],
   sacrifice: ["A001", "1"], repair: ["ALL"], infuse: ["3", "1"], weapons: [], armors: [],
   rules: [],

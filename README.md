@@ -254,3 +254,8 @@ Cache openings save rewards atomically before a short two-edit reveal. One featu
 Battle cards use cached local pack portraits for Rift enemies and validated, bounded avatar fetching for player opponents, with local silhouettes as fallback. Combat highlights and totals come from the recorded simulation. Rendering concurrency and asset caches are bounded. No schema migration or database reset is required by this visual update.
 
 Weapon and armor collections (`n weapons`, `n weps`, `n armors`) use one message with Previous/Next buttons and a page counter. Only the requesting player can navigate; controls expire after ten minutes. Page clicks refresh current ownership without changing XP, cooldowns or inventory. Large stacks retain all gear IDs across additional pages.
+
+
+### Disable commands in a channel
+
+Use `n disable` (`n dis`) in a channel to make Neox silently ignore prefix commands there. Restore them with `n enable` (`n ena`) in the same channel. Server owners, Administrators, and members with Manage Server or Manage Channels in that channel can toggle it; game-rules acceptance is not required. Slash commands and old buttons/modals show a private disabled notice. Other channels are unaffected; threads are separate channels. The setting persists across restarts in the additive `disabled_channels` table, created automatically when the database opens. Existing player data is unchanged.

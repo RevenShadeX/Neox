@@ -14,11 +14,11 @@ const categories = [
   ["progress", "🏆 Profiles & rankings", ["profile", "level", "rank", "levels", "leaderboard", "levelrewards"]],
   ["trading", "🤝 Equipment trading", ["trade", "trades", "accept", "cancel"]],
   ["roles", "🏷️ Server role shop", ["roleshop", "rolepurchases", "refunds", "roleshopadmin"]],
-  ["settings", "⚙️ Server settings", ["prefix", "levelannouncements"]],
+  ["settings", "⚙️ Server settings", ["prefix", "levelannouncements", "disable", "enable"]],
   ["legacy", "📜 Compatibility commands", ["pay", "treasury"]],
 ];
 const examples = {
-  ping: "", weekly: "", battle: "", boss: "", sell: "all", sellanimals: "a001 2", sacrifice: "all",
+  disable: "", enable: "", ping: "", weekly: "", battle: "", boss: "", sell: "all", sellanimals: "a001 2", sacrifice: "all",
   open: "weapon", boxinfo: "weapon", pet: "a001", feed: "1", trade: "@user 42 100",
   cf: "100 heads", dice: "100 high", slots: "100", duel: "random 100",
   deposit: "100", withdraw: "all", buy: "food 1", hunt: "", daily: "",
@@ -27,6 +27,7 @@ const examples = {
   upgrade: "42", enhance: "42", repair: "42", infuse: "42 5", compare: "42 43",
 };
 function permission(command) {
+  if (["disable", "enable"].includes(command)) return "Server owner, Administrator, Manage Server, or Manage Channels in this channel. Rules acceptance is not required.";
   if (command === "ping") return "Everyone, including players who have not accepted the rules.";
   if (command === "roleshopadmin") return "Server owner, Administrator, or both Manage Server and Manage Roles. Neox also needs Manage Roles and a higher role than the role being sold.";
   if (["prefix", "levelannouncements"].includes(command)) return "Server owner, Administrator, or Manage Server.";
@@ -80,6 +81,8 @@ function guide(prefix, query) {
     trading: "**Trading equipment**\nUse `n trade @user gear-id price` to offer gear to another player. Check the offer before accepting.",
   };
   const usageGuides = {
+    disable: "Use `n disable` or `n dis` in the channel you want Neox to ignore. Requires Manage Channels, Manage Server, server ownership or Administrator. Prefix commands are silently ignored after disabling. Slash commands, buttons and modals receive a private disabled notice.\nUse `n enable` or `n ena` in the same channel to restore commands. Only managers can toggle the setting. Settings survive bot restarts and affect only this exact channel; threads are configured separately. Existing balances, inventories and cooldowns are preserved.",
+    enable: "Use `n enable` or `n ena` in a disabled channel to turn Neox commands back on. Requires Manage Channels, Manage Server, server ownership or Administrator. It works without accepting game rules and remains available when the channel is disabled.\nThe setting applies only to the current channel and survives restarts. Use `n disable` or `n dis` to turn commands off again.",
     ping: "Use `n ping` or `n p` to check Neox. The response shows the measured message response time and Discord Gateway heartbeat latency in milliseconds. Gateway latency says unavailable until Discord supplies a heartbeat measurement. Ping does not require rules acceptance or grant XP.",
     daily: "Claim every 24 hours with `n daily` or `n d`. Global Level 1 rolls 1,000–1,500 Neo Coins; each additional global level adds 500 to both ends (Level 2: 1,500–2,000). The range uses your level before claiming.\nYou also receive a random 1–(2 + one per 5 extra global levels) Daily Caches. Open them with `n open daily`. Check global level with `n level`; hunting level is separate. Failed claims leave balances, items and cooldowns unchanged. Rewards are saved once and cannot be rerolled by another alias.",
     weekly: "Claim every 7 days with `n weekly` or `n wk`. Weekly rewards are randomized item supplies, not a direct Neo Coin payout.\nAt Global Level 1, receive 2–4 Gem Caches and 1–2 bonus caches: Weapon, Armor or Monster, chosen uniformly. Every 5 additional global levels adds one to both Gem Cache bounds and to the bonus cache maximum.\nExample: Global Level 6 gives 3–5 Gem Caches and 1–3 bonus caches. Use `n boxes` and `n open all` to see and open supplies. Rewards use your level before claiming; existing 7-day cooldowns remain in effect.",

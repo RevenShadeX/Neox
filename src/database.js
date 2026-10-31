@@ -39,6 +39,7 @@ function open(filename = "./data/neox.sqlite") {
  CREATE INDEX IF NOT EXISTS rankings_battle ON players(rating DESC,id);
  CREATE TABLE IF NOT EXISTS battle_stages(user TEXT PRIMARY KEY REFERENCES players(id),stage INTEGER NOT NULL DEFAULT 1 CHECK(stage BETWEEN 1 AND 1000000000));
  CREATE TABLE IF NOT EXISTS guilds(id TEXT PRIMARY KEY,prefix TEXT NOT NULL);
+ CREATE TABLE IF NOT EXISTS disabled_channels(guild TEXT NOT NULL,channel TEXT NOT NULL,PRIMARY KEY(guild,channel));
  CREATE TABLE IF NOT EXISTS inventory(user TEXT NOT NULL REFERENCES players(id),kind TEXT NOT NULL,item TEXT NOT NULL,
  qty INTEGER NOT NULL CHECK(typeof(qty)='integer' AND qty BETWEEN 0 AND 1000000),PRIMARY KEY(user,kind,item));
  CREATE TABLE IF NOT EXISTS discoveries(user TEXT NOT NULL REFERENCES players(id),animal TEXT NOT NULL,PRIMARY KEY(user,animal));

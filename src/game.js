@@ -78,6 +78,13 @@ class Game {
       "n"
     );
   }
+  channelDisabled(guild, channel) {
+    return !!(guild && channel && this.sql("SELECT 1 FROM disabled_channels WHERE guild=? AND channel=?").get(guild, channel));
+  }
+  requireChannelEnabled(ctx) {
+    assert(!this.channelDisabled(ctx.guildId, ctx.channelId),
+      `Neox is disabled in this channel. A channel manager can use ${this.getPrefix(ctx.guildId)} enable here.`, "CHANNEL_DISABLED");
+  }
   money(id, delta, reason) {
     if (delta > 0) return this.economy.mint(id, delta, reason);
     if (delta < 0) return this.economy.spend(id, -delta, reason);
@@ -159,6 +166,7 @@ class Game {
     }
   }
   interact(customId, input, ctx) {
+    this.requireChannelEnabled(ctx);
     return this.request(ctx, () => {
       const m = /^nx:([a-f0-9]{24}):(\d{1,6}):([a-z]+)$/.exec(customId);
       assert(m, "Invalid component ID.");
@@ -166,6 +174,7 @@ class Game {
     });
   }
   duelAction(id, action, ctx) {
+    this.requireChannelEnabled(ctx);
     return this.request(ctx, () => {
       this.requireAgreement(ctx.userId);
       return action === "cancel"
@@ -319,8 +328,9 @@ class Game {
       args.every((a) => a.length <= 100),
       "Argument too long.",
     );
+    if (!["disable", "enable"].includes(name)) this.requireChannelEnabled(ctx);
     return this.request(ctx, (player) => {
-      if (!["ping", "help", "rules", "agree", "decline", "refunds"].includes(name))
+      if (!["disable", "enable", "ping", "help", "rules", "agree", "decline", "refunds"].includes(name))
         this.requireAgreement(player.id);
       if (!["rules", "agree", "decline"].includes(name))
         this.cooldown(player.id, "command", 1000);
@@ -426,6 +436,16 @@ class Game {
         return a[0] === "random"
           ? this.duels.join(ctx, wager)
           : this.duels.create(ctx, userId(a[0]), wager);
+      }
+      case "disable":
+      case "enable": {
+        assert(ctx.manageGuild || ctx.manageChannels, "Manage Channels or Manage Server permission is required.");
+        assert(/^\d{5,22}$/.test(ctx.guildId || "") && /^\d{5,22}$/.test(ctx.channelId || ""), "Use this command in a server channel.");
+        if (name === "disable") this.sql("INSERT OR IGNORE INTO disabled_channels(guild,channel) VALUES(?,?)").run(ctx.guildId, ctx.channelId);
+        else this.sql("DELETE FROM disabled_channels WHERE guild=? AND channel=?").run(ctx.guildId, ctx.channelId);
+        return { completed: false, content: name === "disable"
+          ? `🔒 Neox commands are disabled in this channel. Use ${this.getPrefix(ctx.guildId)} enable here to turn them back on.`
+          : "🔓 Neox commands are enabled in this channel." };
       }
       case "ping":
         return { content: "Pong!", completed: false, presentation: { kind: "ping" } };

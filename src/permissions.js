@@ -24,4 +24,11 @@ function serverPermissions(source, interaction = false) {
       !!permissions?.has(PermissionFlagsBits.ManageRoles),
   };
 }
-module.exports = { serverPermissions };
+function canManageChannel(source, interaction = false) {
+  if (serverPermissions(source, interaction).manageGuild) return true;
+  const permissions = interaction ? source.memberPermissions
+    : source.channel?.permissionsFor ? source.channel.permissionsFor(source.member || source.author)
+      : source.member?.permissions;
+  return !!permissions?.has(PermissionFlagsBits.ManageChannels);
+}
+module.exports = { serverPermissions, canManageChannel };

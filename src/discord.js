@@ -9,7 +9,7 @@ const {
   Events,
 } = require("discord.js");
 const { GameError, userId, number } = require("./game");
-const { serverPermissions } = require("./permissions");
+const { serverPermissions, canManageChannel } = require("./permissions");
 const { commands, registry } = require("./commands");
 const { parsePrefix, parseArguments } = require("./parser");
 const { presentCoinflip, levelUpPayload } = require("./presentation");
@@ -171,6 +171,8 @@ function createClient(
       (interaction ? s.user : s.author).globalName ||
       (interaction ? s.user : s.author).username,
     guildId: s.guildId,
+    channelId: s.channelId || s.channel?.id,
+    manageChannels: canManageChannel(s, interaction),
     ...serverPermissions(s, interaction),
     requestId: s.id,
   });
@@ -410,6 +412,7 @@ function createClient(
     if (!parsed) return;
     const ctx = context(message),
       name = registry.resolve(parsed.command);
+    if (game.channelDisabled(ctx.guildId, ctx.channelId) && !["enable", "disable"].includes(name)) return;
     let output;
     try {
       if (name === "duel") {
@@ -464,6 +467,11 @@ function createClient(
     if (!isCommand && !isComponent && !isModal) return;
     const ctx = context(i, true);
     if (!ctx.guildId) throw new GameError("Use Neox in a server.");
+    const channelToggle = isCommand && ["enable", "disable"].includes(registry.resolve(i.commandName));
+    if (!channelToggle && game.channelDisabled(ctx.guildId, ctx.channelId)) {
+      await i.reply({ content: `🔒 Neox is disabled in this channel. A channel manager can use ${game.getPrefix(ctx.guildId)} enable here.`, flags: 64, allowedMentions: UI.allowedMentions });
+      return;
+    }
     if (isCommand) {
       if (!registry.resolve(i.commandName)) return;
       await i.deferReply();
