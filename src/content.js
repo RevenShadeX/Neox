@@ -95,7 +95,8 @@ const equipment = types.flatMap((type, t) =>
               : type === "accessory"
                 ? "fortune"
                 : "force",
-    price: 200 * (r + 1) ** 5,
+    // Legendary equipment is a premium long-term goal in the global shop.
+    price: rarity === "Legendary" ? 10000000 : 200 * (r + 1) ** 5,
     tradeable: true,
     maxLevel: 10,
     durability: null,
