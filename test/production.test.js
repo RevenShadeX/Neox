@@ -141,7 +141,7 @@ test("global rules consent is required, persists across servers, and decline rel
     (e) => e.code === "RULES_REQUIRED",
   );
   f.run("agree");
-  assert.match(f.run("hunt").content, /You found/);
+  assert.match(f.run("hunt").content, /HUNT COMPLETE/);
 });
 test("rules sessions reject cross-server, stale and duplicate acceptance controls", (t) => {
   const f = fixture(t);

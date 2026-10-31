@@ -88,11 +88,11 @@ test("insufficient and overflow equipment payments roll back both accounts", (t)
   assert.throws(() => f.run("accept", ["1"]), /enough/);
   assert.equal(f.game.player(A).wallet, before);
 });
-test("direct currency gifting is disabled without changing either player balance", (t) => {
+test("payment confirmation leaves both balances unchanged", (t) => {
   const f = fixture(t);
   f.run("cash");
   f.run("cash", [], B);
-  assert.throws(() => f.run("pay", [B, "200"]), /gifting is disabled/);
+  assert.match(f.run("pay", [B, "200"]), /confirm|payment/i);
   assert.equal(f.game.player(A).wallet, 500);
   assert.equal(f.game.player(B).wallet, 500);
 });
@@ -121,7 +121,7 @@ test("duplicate requests cannot replay payments even after command cooldown", (t
 });
 test("hunting grants animals, XP and streaks while enforcing cooldown", (t) => {
   const f = fixture(t);
-  assert.match(f.run("hunt"), /You found/);
+  assert.match(f.run("hunt"), /HUNT COMPLETE/);
   const p = f.game.player(A);
   assert.equal(p.hunts, 1);
   assert.ok(p.xp > 0);
@@ -435,7 +435,7 @@ test("prefix and slash adapters call the same engine and enforce permissions", a
     channel: { send: async (payload) => sent.push(payload) },
   });
   await new Promise((resolve) => setImmediate(resolve));
-  assert.match(sent[0].content, /1,200/);
+  assert.match(JSON.stringify(sent[0].embeds), /1,200/);
   assert.deepEqual(sent[0].allowedMentions.parse, []);
   f.tick(2000);
   const replies = [];
@@ -456,7 +456,7 @@ test("prefix and slash adapters call the same engine and enforce permissions", a
 test("payment cannot manufacture starting balances for arbitrary recipient IDs", (t) => {
   const f = fixture(t);
   f.run("cash");
-  assert.throws(() => f.run("pay", [B, "1"]), /gifting is disabled/);
+  assert.match(f.run("pay", [B, "1"]), /confirm|payment/i);
   assert.equal(f.game.player(A).wallet, 500);
   assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM players").get().n, 1);
 });

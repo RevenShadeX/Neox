@@ -15,7 +15,10 @@ const { presentCoinflip, levelUpPayload } = require("./presentation");
 const { presentSlots } = require("./slots-presentation");
 const { EmojiResolver } = require("./emojis");
 const { decoratePayload } = require("./emoji-decorate");
+const { itemEmojiName, itemAttachment } = require("./pack-art");
 const { lootImage, battleImage } = require("./visual-cards");
+const { payloadPages } = require("./payload-safety");
+const { presentLoot } = require("./loot-presentation");
 const { ProfileService } = require("./profile-service");
 const { RoleRecovery } = require("./role-shop");
 const { roleAPI } = require("./discord-roles");
@@ -64,32 +67,20 @@ function collectionCards(p, emojis) {
   const isArmor = p.command === "armors";
   const title = isArmor ? "🛡️ ARMOR VAULT" : "🗡️ WEAPON ARSENAL";
   const types = isArmor ? ["armor"] : ["sword", "bow", "dagger", "spear", "staff"];
-  const tierNames = ["Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic"];
-  const iconNames = {
-    sword: ["neox_sword", "neox_greatsword", "neox_katana", "neox_fireblade", "neox_holyblade", "neox_darkblade"],
-    bow: ["neox_bow", "neox_bow", "neox_bow", "neox_bow", "neox_bow", "neox_bow"],
-    dagger: ["neox_dagger", "neox_claw", "neox_dagger", "neox_claw", "neox_dagger", "neox_claw"],
-    spear: ["neox_spear", "neox_spear", "neox_spear", "neox_spear", "neox_spear", "neox_spear"],
-    staff: ["neox_staff", "neox_wand", "neox_staff", "neox_wand", "neox_staff", "neox_wand"],
-    armor: ["neox_armor_light", "neox_armor_shadow", "neox_heavy", "neox_mystic", "neox_armor_dragon", "neox_armor_void"],
-  };
   const cards = [];
   for (const type of types) {
     const entries = (p.items || []).filter(item => item.type === type);
     const lines = entries.map(item => {
-      const tier = Math.max(0, tierNames.indexOf(item.rarity));
-      const names = iconNames[type];
-      const emoji = emojis?.named?.(names[tier]) || emojis?.named?.(names[0]) || (isArmor ? "🛡️" : "🗡️");
+      const emoji = emojis?.named?.(itemEmojiName(item)) || emojis?.named?.(itemEmojiName({ type })) || (isArmor ? "🛡️" : "🗡️");
       const owned = item.state.startsWith("OWNED");
-      const name = item.name.replace(/^(Ash|Copper|Veil|Astral|Crown|Rift) /, "");
       return `${emoji} **${item.name}** · ${item.rarity}\n   ${owned ? "✅ " + item.state : "▫️ Not collected"}`;
     });
     cards.push({
       content: "",
       embeds: [{
-        color: isArmor ? 0x5865a8 : 0x9b3147,
+        color: 0x9b3147,
         title: `${title}  /  ${type.toUpperCase()}`,
-        description: lines.join("\n\n").slice(0, 3900) || "No items available.",
+        description: lines.join("\n\n") || "No items available.",
         footer: { text: "NEOX • Use n equip <gear-id> to equip owned gear" },
       }],
       allowedMentions: { parse: [] },
@@ -99,7 +90,7 @@ function collectionCards(p, emojis) {
 }
 function dailyCard(p) {
   return { content: "", embeds: [{
-    color: 0x35c99e, title: "🎁 DAILY SUPPLY DROP",
+    color: 0xb91c32, title: "🎁 DAILY SUPPLY DROP",
     description: "**Claim successful**\nYour daily rewards have been added to your inventory.",
     fields: [
       { name: "🪙 DARK COINS", value: `**+${p.reward.toLocaleString("en-US")}**`, inline: true },
@@ -110,14 +101,24 @@ function dailyCard(p) {
   }], allowedMentions: { parse: [] } };
 }
 function lootCards(p) {
-  const rewards = p.rewards || [];
+  const grouped = new Map();
+  for (const reward of p.rewards || []) {
+    const gear = /^#(\d+) (.+)$/.exec(reward.name);
+    const name = gear ? gear[2] : reward.name;
+    const key = `${name}|${reward.rarity}|${reward.category}`;
+    const entry = grouped.get(key) || { ...reward, name, quantity: 0, gearIds: [] };
+    entry.quantity += reward.quantity;
+    if (gear) entry.gearIds.push(gear[1]);
+    grouped.set(key, entry);
+  }
+  const rewards = [...grouped.values()];
   const pages = [];
   for (let offset = 0; offset < rewards.length; offset += 12) {
     const slice = rewards.slice(offset, offset + 12);
     pages.push({ content: "", embeds: [{
       color: 0x8251c9, title: "📦 CACHE UNSEALED",
-      description: `**${p.opened}** cache${p.opened === 1 ? "" : "s"} opened · **${rewards.reduce((n, x) => n + x.quantity, 0)}** rewards\n\n` +
-        slice.map(r => `• **${r.name}**  ×${r.quantity}`).join("\n"),
+      description: `**${p.opened}** cache${p.opened === 1 ? "" : "s"} opened · **${rewards.reduce((n, x) => n + x.quantity, 0)}** rewards\n${(p.caches || []).map(c => `${c.name} ×${c.quantity}`).join(" • ")}\n\n**REWARDS OBTAINED**\n` +
+        slice.map(r => `${r.icon || "📦"} **${r.name}** ×${r.quantity} [${r.rarity || "Reward"}] · ${r.category || "Item"}${r.gearIds.length ? `\nGear IDs: ${r.gearIds.map(id => `#${id}`).join(", ")}` : ""}`).join("\n"),
       footer: { text: `NEOX • Loot results ${pages.length + 1}/${Math.max(1, Math.ceil(rewards.length / 12))}` },
     }], allowedMentions: { parse: [] } });
   }
@@ -173,7 +174,7 @@ function createClient(
       ? `⚠️ ${err.message}`
       : "⚠️ Something went wrong. Please try again. If it keeps happening, contact a server admin.";
   const logError = (label, error) =>
-    console.warn(label, error.code || error.name || "Error");
+    console.warn(label, { code: error.code, name: error.name, message: error.message?.slice(0, 300) });
   const context = (s, interaction = false) => ({
     userId: (interaction ? s.user : s.author).id,
     displayName:
@@ -247,12 +248,31 @@ function createClient(
   }
   async function deliver(output, source, transport) {
     const original = transport;
+    const send = async (method, payload, sent) => {
+      const pages = payloadPages(decoratePayload(payload, emojis));
+      const first = method === "finish" ? await original.finish(sent, pages[0]) : await original[method](pages[0]);
+      for (const page of pages.slice(1)) await original.extra(page);
+      return first;
+    };
     transport = {
       ...original,
-      show: (p) => original.show(decoratePayload(p, emojis)),
-      extra: (p) => original.extra(decoratePayload(p, emojis)),
-      fallback: (p) => original.fallback(decoratePayload(p, emojis)),
-      finish: (sent, p) => original.finish(sent, decoratePayload(p, emojis)),
+      show: (p) => send("show", p),
+      extra: (p) => send("extra", p),
+      fallback: (p) => send("fallback", p),
+      finish: (sent, p) => send("finish", p, sent),
+    };
+    const showArtwork = async payload => {
+      try { return await transport.show(payload); }
+      catch (error) {
+        if (!payload.files?.length) throw error;
+        logError("Artwork delivery failed:", error);
+        const fallback = { ...payload, files: [], attachments: [], embeds: (payload.embeds || []).map(e => {
+          const data = e.toJSON ? e.toJSON() : { ...e };
+          delete data.image; delete data.thumbnail;
+          return data;
+        }) };
+        return transport.fallback(fallback);
+      }
     };
     const p = output.presentation;
     if (p?.kind === "modal") {
@@ -264,7 +284,14 @@ function createClient(
       return;
     }
     if (p?.kind === "panel") {
-      await transport.show(UI.panel(game, p.session));
+      const payload = { ...UI.panel(game, p.session), attachments: [] };
+      const state = p.session.state;
+      if (p.session.kind === "shop" && state.stage !== "browse") {
+        const item = require("./pack-art").catalogItem(state.item);
+        const file = item && itemAttachment(item);
+        if (file) { payload.files = [file]; payload.embeds[0].setThumbnail(`attachment://${file.name}`); }
+      }
+      await showArtwork(payload);
       return;
     }
     if (p?.kind === "duel") {
@@ -307,16 +334,7 @@ function createClient(
       await transport.show(cards[0]);
       for (const card of cards.slice(1)) await transport.extra(card);
     } else if (p?.kind === "loot") {
-      const finds = p.rareFinds || [];
-      if (finds.length) {
-        for (const item of finds) {
-          try { await transport.show({ content: `✨ **${item.rarity.toUpperCase()} DROP!** • ${item.name}`, files: [lootImage(item)], allowedMentions: UI.allowedMentions }); }
-          catch (e) { logError("Loot artwork unavailable:", e); await transport.show({ content: `✨ **${item.rarity.toUpperCase()} DROP!** • ${item.name}`, allowedMentions: UI.allowedMentions }); }
-        }
-      }
-      const cards = lootCards(p);
-      await transport.show(cards[0]);
-      for (const card of cards.slice(1)) await transport.extra(card);
+      await presentLoot(p, transport, { ...animation, cards: lootCards, render: lootImage, emojis, logError });
     } else if (p?.kind === "card") {
       const cards = UI.commandCards(output);
       if (p.combat) {
@@ -324,14 +342,15 @@ function createClient(
           const combat = p.combat;
           const getAvatar = async (id) => {
             if (!id) return null;
-            const user = await client.users.fetch(id).catch(() => null);
-            return user?.displayAvatarURL({ extension: "png", size: 128 }) || null;
+            const identity = await profileService.identity({ userId: id, displayName: id === combat.userId ? combat.playerName : "Rival" }, { user: source.user || source.author, member: source.member, guild: source.guild });
+            return identity;
           };
-          cards[0].files = [await battleImage(p, await getAvatar(combat.userId), await getAvatar(combat.enemyId))];
+          const [player, opponent] = await Promise.all([getAvatar(combat.userId), getAvatar(combat.enemyId)]);
+          cards[0].files = [await battleImage(p, player, opponent)];
         }
         catch (e) { logError("Battle artwork unavailable:", e); }
       }
-      await transport.show(cards[0]);
+      await showArtwork(cards[0]);
       for (const card of cards.slice(1)) await transport.extra(card);
     } else {
       const parts = chunks(output.content);
@@ -594,4 +613,4 @@ function createClient(
   client.on(Events.Error, (e) => logError("Discord client error:", e));
   return client;
 }
-module.exports = { createClient, definitions, parsePrefix, chunks };
+module.exports = { createClient, definitions, parsePrefix, chunks, collectionCards, dailyCard, lootCards };

@@ -30,6 +30,9 @@ class EmojiResolver {
         this.available.set(emoji.id, { guildId, animated: !!emoji.animated });
   }
   observeApplication(emojis) {
+    emojis = [...emojis];
+    this.byName.clear();
+    for (const [id, entry] of this.available) if (entry.application) this.available.delete(id);
     for (const emoji of emojis) {
       if (emoji.name && /^neox_[a-z0-9_]+$/.test(emoji.name))
         this.byName.set(emoji.name, { id: emoji.id, animated: !!emoji.animated });

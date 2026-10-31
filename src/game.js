@@ -150,6 +150,7 @@ class Game {
       if (!result.presentation && [
         "inventory", "leaderboard", "levels", "zoo", "animals", "collection",
         "huntstats", "gems", "boxes", "boxinfo", "equipment", "weapons", "armors", "pet", "history",
+        "hunt", "craft", "upgrade", "enhance", "repair",
       ].includes(name)) result.presentation = { kind: "card", command: name };
       return result;
     } finally {
@@ -651,21 +652,18 @@ class Game {
         const rows = bulk
           ? this.sql("SELECT item,qty FROM inventory WHERE user=? AND kind='animal'").all(id).filter((r) => !rarity || find(C.animals, r.item).rarity === rarity)
           : [{ item: find(C.animals, a[0]).id, qty: this.qty(id, "animal", a[0]) }];
-        let count = 0, earned = 0;
+        let count = 0;
         for (const row of rows) {
-          const quantity = bulk ? row.qty : a[1] ? n(a[1], 1, 1000000) : 1;
+          const quantity = bulk ? Math.max(0, row.qty - 1) : a[1] ? n(a[1], 1, 1000000) : 1;
           if (!quantity) continue;
           const animal = find(C.animals, row.item);
           assert(quantity <= row.qty, "Not enough monsters.");
-          const coins = Math.floor(animal.value / 4) * quantity;
-          assert(Number.isSafeInteger(earned + coins), "Sale amount too large.");
           this.item(id, "animal", animal.id, -quantity);
-          earned += coins;
           count += quantity;
         }
         assert(count > 0, "No monsters available to sell.");
-        this.money(id, earned, "monster sales");
-        return `**NEOX • MONSTERS SOLD**\nSold: **${fmt(count)} monsters**\nEarned: **${fmt(earned)} Dark Coins**\n\nSelling all sells every matching monster. Use n sacrifice all to keep one of each and turn duplicates into Rift Essence.`;
+        // Disposal preserves the documented economy: it cannot mint currency.
+        return `Released **${fmt(count)} monsters**. No Dark Coins created. Discoveries are preserved; bulk release keeps one of each species.`;
       }
       case "huntstats":
         return `Level ${level(p)} • ${fmt(p.xp)} hunting XP\n${fmt(p.hunts)} hunts • streak ${p.streak}/50\n${this.sql("SELECT COUNT(*) AS n FROM discoveries WHERE user=?").get(id).n}/200 species discovered\nNext level: ${fmt(level(p) ** 2 * 100)} XP`;
@@ -790,16 +788,16 @@ class Game {
       }
       case "armors":
       case "weapons": {
-        const owned = this.sql("SELECT id,item,slot FROM gear WHERE user=? ORDER BY id").all(id);
+        const owned = this.sql("SELECT id,item,slot,level,enhance FROM gear WHERE user=? ORDER BY id").all(id);
         const weapons = C.equipment.filter((item) => item.slot === (name === "armors" ? "armor" : "weapon"));
         const lines = weapons.map((item) => {
           const copies = owned.filter((gear) => gear.item === item.id);
           const state = copies.length
-            ? "OWNED x" + copies.length + " • " + copies.map((gear) => "#" + gear.id + (gear.slot ? " equipped" : "")).join(", ")
+            ? "OWNED x" + copies.length + " • " + copies.map((gear) => "#" + gear.id + " L" + gear.level + " +" + gear.enhance + (gear.slot ? " equipped" : "")).join(", ")
             : "NOT OWNED";
           return item.name + " [" + item.rarity + "] • " + state;
         });
-        return { content: lines.join("\\n"), presentation: { kind: "collection", command: name, items: weapons.map((item, i) => ({ name: item.name, rarity: item.rarity, type: item.type, state: lines[i].split(" • ").slice(1).join(" • ") })) } };
+        return { content: lines.join("\n"), presentation: { kind: "collection", command: name, items: weapons.map((item, i) => ({ name: item.name, rarity: item.rarity, type: item.type, state: lines[i].split(" • ").slice(1).join(" • ") })) } };
       }
       case "equipment": {
         const s = this.stats(id);
@@ -926,8 +924,11 @@ class Game {
               ];
         let opened = 0;
         const rewards = new Map();
+        const rewardDetails = new Map();
+        const caches = [];
         const rareFinds = [];
-        const add = (s) => rewards.set(s, (rewards.get(s) || 0) + 1);
+        let featuredGear = null;
+        const add = (label, details) => { rewards.set(label, (rewards.get(label) || 0) + 1); rewardDetails.set(label, details); };
         for (const row of rows) {
           if (opened >= 50) break;
           const b = find(C.boxes, row.item);
@@ -940,6 +941,7 @@ class Game {
           quantity = Math.min(quantity, 50 - opened);
           if (!quantity) continue;
           this.item(id, "box", b.id, -quantity);
+          caches.push({ name: b.name, quantity });
           for (let i = 0; i < quantity; i++) {
             for (
               let j = 0, rolls = this.rng.int(...b.quantity);
@@ -960,7 +962,7 @@ class Game {
                 const durability = this.rng.weighted([[50, 60], [100, 28], [500, 10], [1000, 2]]);
                 const variant = `${g.id}-${durability}`;
                 this.item(id, "gem", variant, 1);
-                add(`${g.name} • ${durability} uses`);
+                add(`${g.name} • ${durability} uses`, { rarity: `Tier ${tier}`, category: "Gem", icon: "💎" });
               } else {
                 const tier = this.rng.weighted(
                   b.tierWeights
@@ -972,7 +974,7 @@ class Game {
                     C.animals.filter((x) => x.tier === tier),
                   );
                   this.animal(id, animal, 1);
-                  add(`${animal.id} ${animal.name}`);
+                  add(`${animal.id} ${animal.name}`, { rarity: animal.rarity, category: "Monster", icon: "🐾" });
                   if (animal.tier >= 4) rareFinds.push({ name: animal.name, rarity: animal.rarity, type: "companion", id: animal.id, tier: animal.tier });
                 } else {
                   const e = this.rng.pick(
@@ -987,7 +989,8 @@ class Game {
                     ),
                   );
                   const gid = this.giveGear(id, e.id);
-                  add(`#${gid} ${e.id}`);
+                  add(`#${gid} ${e.name}`, { rarity: e.rarity, category: e.type, icon: itemIcon(e) });
+                  featuredGear = !featuredGear || e.tier > featuredGear.tier ? { ...e, gearId: String(gid) } : featuredGear;
                   if (e.tier >= 4) rareFinds.push({ name: e.name, rarity: e.rarity, type: e.type, id: e.id, gearId: String(gid), attack: e.attack, defense: e.defense, ability: e.ability, tier: e.tier });
                 }
               }
@@ -999,7 +1002,7 @@ class Game {
         // Loot boxes grant items only; currency creation is restricted.
         return {
           content: `Opened ${opened} boxes • monster and item rewards\n${[...rewards].map(([s, q]) => `${s} ×${q}`).join("\n")}`,
-          presentation: { kind: "loot", opened, rareFinds: rareFinds.slice(0, 5), rewards: [...rewards].map(([name, quantity]) => ({ name, quantity })) },
+          presentation: { kind: "loot", opened, caches, featuredGear, rareFinds: rareFinds.sort((a, b) => b.tier - a.tier).slice(0, 5), rewards: [...rewards].map(([name, quantity]) => ({ name, quantity, ...rewardDetails.get(name) })) },
         };
       }
       case "pet": {
@@ -1136,7 +1139,7 @@ class Game {
           content: `${enemy ? `Ranked spar against <@${enemyId}>` : boss ? "Boss battle against the Sovereign of the Rift" : `Expedition Stage ${stage} against ${elite ? "the Eternal Rift Sovereign" : stageBoss ? "a Rift Overlord" : "a Rift Sentinel"}`}\n${log.join("\n")}\n${draw ? "Draw" : won ? "Victory" : "Defeat"} • +0 Dark Coins • ${won ? 35 : 15} hunting XP\nRanked sparring uses saved equipment; no opponent coins are taken.\nEquipped gear loses 1–4% condition per fight. Repair with n repair all.${battleLoot}`,
           presentation: {
             kind: "card", command: name,
-            combat: { won, draw, weaponCache: !!battleLoot, hp: Math.max(0, hp), enemyHP: Math.max(0, ehp), userId: id, enemyId, playerLevel: level(p), opponentLevel: enemy ? level(enemy) : null, playerAttack: me.attack, opponentAttack: foe.attack, playerDefense: me.defense, opponentDefense: foe.defense,
+            combat: { playerName: cleanName(ctx.displayName || p.display_name), playerGear: me.rows.map(g => ({ ...C.equipment.find(e => e.id === g.item), gearId: g.id })), playerAbilities: me.abilities, opponentAbilities: foe.abilities, won, draw, weaponCache: !!battleLoot, hp: Math.max(0, hp), enemyHP: Math.max(0, ehp), userId: id, enemyId, playerLevel: level(p), opponentLevel: enemy ? level(enemy) : null, playerAttack: me.attack, opponentAttack: foe.attack, playerDefense: me.defense, opponentDefense: foe.defense,
               enemy: enemy ? `<@${enemyId}>` : boss ? "Sovereign of the Rift" : elite ? "Eternal Rift Sovereign" : stageBoss ? "Rift Overlord" : "Rift Sentinel",
               stage, stageBoss, elite, enemyMaxHP, nextStage: stage === null ? null : stage + (won && !draw && stage < 1000000000 ? 1 : 0),
               log, rounds, totals, xp: won ? 35 : 15 },
@@ -1325,6 +1328,8 @@ class Game {
           hunts: player.hunts,
           battles: player.battles_total,
           coinflipWins: player.coinflip_wins,
+          wins: player.wins,
+          equipment: this.stats(target).rows.map(g => ({ ...C.equipment.find(e => e.id === g.item), gearId: g.id })),
           pendingRewards: player.pending_level_coins,
         };
         return {

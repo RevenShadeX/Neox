@@ -168,7 +168,7 @@ levelThreshold = sum(each rounded earlier nextLevelXP)
 levelReward = round(10000 × 1.10^(newLevel−2))
 ```
 
-Exact decimal-rational math yields first requirements 20,000 / 23,000 / 26,450 / 30,418 / 34,980 and rewards 10,000 / 11,000 / 12,100 / 13,310 / 14,641. Global XP caps at one trillion. Every crossed level is rewarded exactly once; wallet overflow remains pending for `levelrewards`. Card progress is within-level XP divided by that level's requirement (e.g. 15,000/34,980 = 42.88%). `/profile`, `/level`, `/rank` use the same in-memory 900×300 card, real avatar or monogram, global XP rank, balances and counters. `/levels` / `leaderboard xp` use indexed paginated SQL.
+Exact decimal-rational math yields first requirements 20,000 / 23,000 / 26,450 / 30,418 / 34,980 and rewards 10,000 / 11,000 / 12,100 / 13,310 / 14,641. Global XP caps at one trillion. Every crossed level is rewarded exactly once; wallet overflow remains pending for `levelrewards`. Card progress is within-level XP divided by that level's requirement (e.g. 15,000/34,980 = 42.88%). `/profile`, `/level`, `/rank` use the same in-memory 900×360 card, real avatar or monogram, global XP rank, balances and counters. `/levels` / `leaderboard xp` use indexed paginated SQL.
 
 Global XP defaults per completed action: coinflip 2, hunt 2, battle 2, daily 5, weekly 10, each quest 10, boss 5. Starting/cancelling panels, invalid actions, failed transactions or duplicate requests grant none. Source XP cooldowns are persistent; coinflip XP is limited to once per minute independently of its five-second game cooldown. Daily quests require three hunts, three coinflips or two battles (bosses count), reset at 00:00 UTC and grant XP, not coins. `levelannouncements off` (Manage Server) suppresses public announcements without changing rewards. Announcements are best-effort, at most once per completed request; failed network delivery never reverses or duplicates a settlement.
 
@@ -237,3 +237,12 @@ Anyone can use `n help` or `/help` before accepting the game rules. The guide li
 - `/help args:games` and `/help args:cf` show the same guides.
 
 Available categories: start, coins, hunting, items, gear, combat, games, progress, trading, roles, settings and legacy. Optional arguments use square brackets. Help is generated from the central command registry so command names, aliases and syntax remain consistent with the parser.
+
+
+### Pack artwork and cache reveals
+
+Store lists, item dropdowns, equipment collections and cache rewards resolve exact emoji names from the supplied Neox packs. Upload the pack emojis to the Discord application's emoji manager; Neox discovers their real IDs on ready. No emoji IDs are hardcoded. Static fallback artwork is bundled under `assets/emoji-pack/`, with original ZIP paths recorded in `manifest.json`. Keep that directory with production uploads. Missing uploaded emojis retain readable Unicode icons; weapon reward artwork remains available locally.
+
+Cache openings save rewards atomically before a short two-edit reveal. One featured equipment card uses the matching weapon/armor pack artwork; Legendary and Mythic drops receive gold and purple accents. Duplicate equipment is grouped in the reward summary while retaining every individual gear ID. Delivery retries never reroll rewards. Image attachment failures fall back to the saved reward summary. Large decorated inventories and reward summaries split within Discord's final text limits.
+
+Battle cards use cached local pack portraits for Rift enemies and validated, bounded avatar fetching for player opponents, with local silhouettes as fallback. Combat highlights and totals come from the recorded simulation. Rendering concurrency and asset caches are bounded. No schema migration or database reset is required by this visual update.

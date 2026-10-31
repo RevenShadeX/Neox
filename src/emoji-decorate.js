@@ -1,11 +1,13 @@
 "use strict";
 // Names are the exact filenames from the Neox unique-name emoji pack.
 // All lookups resolve Discord APPLICATION emoji IDs, never server-specific IDs.
+const { itemEmojiName, catalogItem } = require("./pack-art");
+const C = require("./content");
 const symbols = {
   "🪙":"neox_currency_coin", "💎":"neox_gem_rare", "⚔️":"neox_battle",
   "🗡️":"neox_sword", "🏹":"neox_bow", "🔪":"neox_dagger",
   "🔱":"neox_spear", "🪄":"neox_staff", "🛡️":"neox_armor_shield",
-  "📿":"neox_necklace", "📦":"neox_chest", "🎁":"neox_gift",
+  "📿":"neox_necklace", "📦":"neox_coin_chest", "🎁":"neox_gift",
   "🐾":"neox_wolf", "🍖":"neox_item", "🎒":"neox_item",
   "🏆":"neox_victory", "💀":"neox_skull", "👑":"neox_crown",
   "🔥":"neox_fire", "❄️":"neox_ice", "❤️":"neox_heart",
@@ -64,18 +66,9 @@ function lineIcon(line, resolver) {
   const gear = line.match(/(?:#\d+\s+|\b)(?:Ash|Copper|Veil|Astral|Crown|Rift)\s+(sword|bow|dagger|spear|staff|armor|accessory)\b/i);
   if (gear) {
     const type = gear[1].toLowerCase();
-    const rarity = (line.match(/\\[(Common|Uncommon|Rare|Epic|Legendary|Mythic)\\]/i) || [])[1] || "";
-    const variants = {
-      sword: ["neox_sword","neox_greatsword","neox_katana","neox_fireblade","neox_holyblade","neox_darkblade"],
-      bow: ["neox_bow","neox_bow","neox_bow","neox_bow","neox_bow","neox_bow"],
-      dagger: ["neox_dagger","neox_claw","neox_dagger","neox_claw","neox_dagger","neox_claw"],
-      spear: ["neox_spear","neox_spear","neox_spear","neox_spear","neox_spear","neox_spear"],
-      staff: ["neox_staff","neox_wand","neox_staff","neox_wand","neox_staff","neox_wand"],
-      armor: ["neox_armor_light","neox_armor_shadow","neox_heavy","neox_mystic","neox_armor_dragon","neox_armor_void"],
-    };
-    const tiers = ["Common","Uncommon","Rare","Epic","Legendary","Mythic"];
-    const index = tiers.findIndex(r => r.toLowerCase() === rarity.toLowerCase());
-    const selected = index >= 0 ? variants[type]?.[index] : gearNames[type];
+    const rarity = (line.match(/\[(Common|Uncommon|Rare|Epic|Legendary|Mythic)\]/i) || [])[1] || "";
+    const catalog = C.equipment.find(item => line.includes(item.name));
+    const selected = itemEmojiName(catalog || { type, rarity });
     return named(resolver,selected) || named(resolver,gearNames[type]);
   }
   const gem = line.match(/\b(lucky|hunting|xp|currency|event)(?:[123]|\s+gem)\b/i);
@@ -107,7 +100,7 @@ const buttonNames = {
   "Accept Rules":"neox_success",Decline:"neox_x",Heads:"neox_skull",
   Tails:"neox_crown",Cancel:"neox_x",Previous:"neox_arrowdown",
   Next:"neox_arrowup",Gems:"neox_gem_rare",Equipment:"neox_sword",
-  "Loot boxes":"neox_chest",Consumables:"neox_potion_hp",
+  "Loot boxes":"neox_coin_chest",Consumables:"neox_potion_hp",
   "Confirm Purchase":"neox_success","Confirm Payment":"neox_success",
   "Enter Quantity":"neox_info","Change Quantity":"neox_info",
   "Edit Price":"neox_settings","Remove Listing":"neox_x",
@@ -119,6 +112,12 @@ function decorateComponents(components,resolver) {
   return components.map((row) => {
     const data=typeof row.toJSON==="function"?row.toJSON():structuredClone(row);
     if (data.components) for (const c of data.components) {
+      if (c.options) for (const option of c.options) {
+        const item = catalogItem(option.value);
+        const name = item && itemEmojiName(item);
+        const entry = name && resolver.byName?.get(name);
+        if (entry) option.emoji = { id: entry.id, name, animated: entry.animated };
+      }
       const name=buttonNames[c.label];
       const entry=name && resolver.byName?.get(name);
       if (entry) c.emoji={id:entry.id,name,animated:entry.animated};

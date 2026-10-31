@@ -315,33 +315,38 @@ function help(p, ownerId) {
   };
 }
 const cardStyles = {
-  inventory: ["🎒 Inventory", 0x8b5cf6],
+  hunt: ["🐾 Hunt Complete", RED], craft: ["🔨 Crafting", RED], upgrade: ["⚔️ Equipment Upgrade", RED], enhance: ["💎 Enhancement", RED], repair: ["🛡️ Equipment Repaired", RED],
+  inventory: ["🎒 Inventory", 0x8e2942],
   leaderboard: ["🏆 Global Leaderboard", 0xf59e0b], levels: ["🏆 Level Rankings", 0xf59e0b],
-  zoo: ["🐾 Monster Collection", 0x10b981], animals: ["📖 Monster Bestiary", 0x10b981],
-  collection: ["🏅 Collection Milestones", 0x10b981], huntstats: ["🎯 Hunting Statistics", 0x10b981],
-  gems: ["💎 Your Gems", 0x8b5cf6], equipment: ["⚔️ Your Equipment", 0x8b5cf6],
-  weapons: ["🗡️ Weapon Collection", 0x8b5cf6], armors: ["🛡️ Armor Collection", 0x8b5cf6],
-  boxes: ["📦 Your Loot Boxes", 0x8b5cf6], boxinfo: ["📦 Loot Box Details", 0x8b5cf6],
-  pet: ["🐾 Your Companion", 0x10b981], history: ["🧾 Transaction History", 0x64748b],
+  zoo: ["🐾 Monster Collection", 0x942c42], animals: ["📖 Monster Bestiary", 0x942c42],
+  collection: ["🏅 Collection Milestones", 0x942c42], huntstats: ["🎯 Hunting Statistics", 0x942c42],
+  gems: ["💎 Your Gems", 0x8e2942], equipment: ["⚔️ Your Equipment", 0x8e2942],
+  weapons: ["🗡️ Weapon Collection", 0x8e2942], armors: ["🛡️ Armor Collection", 0x8e2942],
+  boxes: ["📦 Your Loot Boxes", 0x8e2942], boxinfo: ["📦 Loot Box Details", 0x8e2942],
+  pet: ["🐾 Your Companion", 0x942c42], history: ["🧾 Transaction History", 0x64748b],
 };
 function commandCards(output) {
   const p = output.presentation;
   const [title, color] = cardStyles[p.command] || ["⚔️ Battle", RED];
   if (p.combat) {
     const c = p.combat;
+    const rounds = c.rounds || [];
+    const important = rounds.filter(r => r.critical || r.healed || r.blocked || r.enemyHP === 0 || r.hp === 0);
+    const highlights = [...new Map([rounds[0], ...important.slice(-3), rounds.at(-1)].filter(Boolean).map(r => [r.turn, r])).values()].sort((a,b) => a.turn - b.turn);
     const card = embed(
       `${p.command === "boss" ? "👹 Boss Battle" : "⚔️ Battle"} • ${c.draw ? "🤝 Draw" : c.won ? "🏆 Victory" : "💀 Defeat"}`,
       `Opponent: **${c.enemy}**${c.stage != null ? `\n⚔️ **Endless Rift • Stage ${c.stage.toLocaleString("en-US")}**${c.elite ? " • ELITE BOSS" : c.stageBoss ? " • BOSS" : ""}\n${c.won ? `Stage cleared! Next: ${c.nextStage.toLocaleString("en-US")}` : "Stage not cleared • Improve your equipment and retry."}` : ""}`,
-    ).setColor(c.draw ? 0xf59e0b : c.won ? 0x10b981 : RED)
+    ).setColor(c.draw ? 0xf59e0b : c.won ? 0x942c42 : RED)
       .addFields(
         { name: "❤️ Your health", value: `${c.hp} / 100 HP`, inline: true },
         { name: "🛡️ Opponent health", value: `${c.enemyHP} / ${c.enemyMaxHP || (p.command === "boss" ? 160 : 100)} HP`, inline: true },
         { name: "✨ Progress", value: `+${c.xp} hunting XP`, inline: true },
-        { name: "⚔️ Damage dealt", value: String(c.totals?.dealt ?? 0), inline: true },
+        { name: "⚔️ Damage dealt / received", value: `${c.totals?.dealt ?? 0} / ${c.totals?.taken ?? 0}`, inline: true },
         { name: "🛡️ Damage blocked", value: String(c.totals?.blocked ?? 0), inline: true },
-        { name: "💥 Critical hits", value: String(c.totals?.crits ?? 0), inline: true },
-        { name: "📜 Combat highlights", value: (c.rounds || []).slice(-5).map(r => `R${r.turn} • ⚔️ ${r.dealt}${r.critical ? " CRIT!" : ""} • 💔 ${r.received} taken${r.healed ? ` • 💚 +${r.healed} HP` : ""}`).join("\n") || "No rounds recorded." },
-        { name: "📜 Battle rounds · You / Opponent", value: `\`\`\`\n${c.log.join("\n")}\n\`\`\`` },
+        { name: "💥 Critical hits / healing", value: `${c.totals?.crits ?? 0} / ${c.totals?.healed ?? 0} HP`, inline: true },
+        { name: "Abilities", value: (c.playerAbilities || []).join(" • ") || "None", inline: true },
+        { name: "Loot", value: c.weaponCache ? "📦 Weapon Cache ×1" : "No equipment drop", inline: true },
+        { name: "📜 Combat highlights", value: highlights.map(r => `Round ${r.turn} — ${r.dealt} damage${r.critical ? " • Critical hit!" : ""} • ${r.received} received${r.blocked ? ` • ${r.blocked} blocked` : ""}${r.healed ? ` • Siphon +${r.healed} HP` : ""}${r.enemyHP === 0 ? " • Enemy defeated" : r.hp === 0 ? " • You fell" : ""}`).join("\n") || "No rounds recorded." },
       ).setFooter({ text: "Neox • Saved equipment combat • No opponent coins taken" });
     return [{ content: "", embeds: [card], allowedMentions }];
   }

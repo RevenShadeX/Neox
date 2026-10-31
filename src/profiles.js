@@ -41,7 +41,7 @@ function background() {
   g.addColorStop(0.5, "#111014");
   g.addColorStop(1, "#1a0b10");
   c.fillStyle = g;
-  c.fillRect(0, 0, 900, 300);
+  c.fillRect(0, 0, 900, 360);
   c.strokeStyle = "#48212a";
   c.lineWidth = 1;
   for (let i = 0; i < 6; i++) {
@@ -168,7 +168,7 @@ class ProfileRenderer {
         c.fillText([...name][0] || "N", 108, 176);
       }
       c.restore();
-      c.strokeStyle = "#b91c32";
+      c.strokeStyle = profile.rank <= 3 || profile.level >= 50 ? "#d6ad65" : "#b91c32";
       c.lineWidth = 3;
       c.beginPath();
       c.arc(108, 157, 78, 0, Math.PI * 2);
@@ -176,7 +176,11 @@ class ProfileRenderer {
       const text = (value, x, y, size = 16, color = "#e3dde0") => {
         c.fillStyle = color;
         c.font = `${size}px NeoxSans`;
-        c.fillText(value, x, y);
+        const label = String(value);
+        const maxWidth = x === 215 ? (y === 194 ? 370 : y === 226 ? 280 : 640) : y === 348 && x === 30 && profile.pendingRewards ? 600 : 870 - x;
+        let fontSize = size;
+        while (c.measureText(label).width > maxWidth && fontSize > 9) { fontSize--; c.font = `${fontSize}px NeoxSans`; }
+        c.fillText(label, x, y, maxWidth);
       };
       c.font = "bold 30px NeoxSans";
       let label = name;
@@ -238,7 +242,7 @@ class ProfileRenderer {
         "#cda8af",
       );
       text(
-        `Hunts: ${profile.hunts.toLocaleString("en-US")}   |   Battles: ${profile.battles.toLocaleString("en-US")}   |   Coinflip wins: ${profile.coinflipWins.toLocaleString("en-US")}`,
+        `Hunts: ${profile.hunts.toLocaleString("en-US")}   |   Battles: ${profile.battles.toLocaleString("en-US")}   |   Wins: ${(profile.wins || 0).toLocaleString("en-US")}`,
         215,
         263,
         14,
@@ -249,10 +253,12 @@ class ProfileRenderer {
       text("NEXT LEVEL", 233, 302, 12, "#a5a1b1");
       text(profile.capped ? "MAX LEVEL" : (Math.max(0, profile.required - profile.current).toLocaleString("en-US") + " XP TO GO"), 233, 322, 18, "#fff1f2");
       text("RANK  #" + profile.rank.toLocaleString("en-US"), 696, 315, 18, "#f2a4ae");
+      const equipped = profile.equipment || [];
+      text(["weapon", "armor"].map(slot => `${slot.toUpperCase()}: ${equipped.find(g => g.slot === slot)?.name || "None"}`).join("  •  "), 30, 348, 11, "#cda8af");
       if (profile.pendingRewards)
         text(
-          `Pending level rewards: ${profile.pendingRewards.toLocaleString("en-US")} Dark Coins`,
-          215,
+          `Pending rewards: ${profile.pendingRewards.toLocaleString("en-US")}`,
+          650,
           348,
           11,
           "#e47786",

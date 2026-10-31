@@ -410,7 +410,7 @@ const card = {
   coinflipWins: 25,
   pendingRewards: 0,
 };
-test("real profile card generation returns a 900×300 PNG using the downloaded avatar", async () => {
+test("real profile card generation returns a 900×360 PNG using the downloaded avatar", async () => {
   let requests = 0;
   const renderer = new ProfileRenderer({
     fetcher: async () => {
@@ -426,7 +426,7 @@ test("real profile card generation returns a 900×300 PNG using the downloaded a
   assert.equal(png.subarray(1, 4).toString(), "PNG");
   const im = await loadImage(png);
   assert.equal(im.width, 900);
-  assert.equal(im.height, 300);
+  assert.equal(im.height, 360);
   const c = createCanvas(900, 300),
     ctx = c.getContext("2d");
   ctx.drawImage(im, 0, 0);
@@ -633,10 +633,10 @@ test("duplicate Discord events announce one level-up and use actual server displ
   await flush();
   assert.match(sent[0].content, /\*\*Kael\*\* spent/);
   const announcements = sent.filter(
-    (p) => p.embeds?.[0]?.title === "NEOX — LEVEL UP",
+    (p) => p.embeds?.[0]?.title === "LEVEL UP!",
   );
   assert.equal(announcements.length, 1);
-  assert.match(announcements[0].embeds[0].description, /Level 1 → Level 2/);
+  assert.match(announcements[0].embeds[0].description, /reached \*\*Level 2\*\*/);
   assert.equal(f.game.player(A).wallet, 10600);
 });
 test("prefix and slash level commands deliver image-only attachments", async (t) => {
@@ -814,7 +814,7 @@ test("slash completion sends one public level-up announcement after atomic settl
   assert.equal(edits.length, 2);
   assert.match(edits[0].content, /\*\*Kael\*\* spent/);
   assert.equal(announcements.length, 1);
-  assert.equal(announcements[0].embeds[0].title, "NEOX — LEVEL UP");
+  assert.equal(announcements[0].embeds[0].title, "LEVEL UP!");
   assert.equal(f.game.player(A).wallet, 10600);
 });
 test("concurrent commands cannot issue the same earned level reward twice", async (t) => {

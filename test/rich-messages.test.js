@@ -55,16 +55,18 @@ test("inventory shows readable names and equipment type icons", (t) => {
   assert.match(card.embeds[0].description, /💎 lucky gem T1 \(lucky1\) ×2/);
   assert.match(card.embeds[0].description, /🗡️ #\d+ Ash sword/);
 });
-test("battle and boss cards include outcome, health, progression and all rounds", (t) => {
+test("battle and boss cards include outcome, health, progression and recorded highlights", (t) => {
   const f = fixture(t);
   for (const command of ["battle", "boss"]) {
     const out = f.run(command);
     const card = json(UI.commandCards(out)[0]).embeds[0];
     assert.match(card.title, /Victory|Defeat|Draw/);
-    assert.equal(card.fields.length, 4);
+    assert.ok(card.fields.length <= 25);
     assert.match(card.fields[0].value, /\d+ \/ 100 HP/);
     assert.match(card.fields[1].value, command === "boss" ? /160 HP/ : /100 HP/);
-    assert.ok(card.fields[3].value.includes(out.presentation.combat.log.at(-1)));
+    const highlights = card.fields.find(f => f.name.includes("highlights")).value;
+    assert.ok(highlights.includes(`Round ${out.presentation.combat.rounds.at(-1).turn}`));
+    assert.ok(!card.fields.some(f => f.name.includes("Battle rounds")));
     assert.ok(card.fields.every((field) => field.value.length <= 1024));
   }
 });
