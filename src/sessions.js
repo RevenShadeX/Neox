@@ -116,16 +116,16 @@ class Sessions {
       g.player(recipient);
       g.economy.transfer(ctx.userId, recipient, amount, "player payment");
       this.save(s, true);
-      return { content: `✅ Payment confirmed: **${amount.toLocaleString("en-US")} Dark Coins** sent to <@${recipient}>. Remaining wallet: **${g.player(ctx.userId).wallet.toLocaleString("en-US")} Dark Coins**.` };
+      return { content: `✅ Payment confirmed: **${amount.toLocaleString("en-US")} Neo Coins** sent to <@${recipient}>. Remaining wallet: **${g.player(ctx.userId).wallet.toLocaleString("en-US")} Neo Coins**.` };
     }
     if (s.kind === "coinflip") {
       if (action === "h" || action === "t")
         return this.modal(
           s,
           `bet${action}`,
-          "Neox | Dark Coinflip",
+          "Neox | Neo Coinflip",
           "wager",
-          "Dark Coins (number, all, or half)",
+          "Neo Coins (number, all, or half)",
           "",
         );
       assert(["beth", "bett"].includes(action), "Unknown coinflip control.");
@@ -272,7 +272,7 @@ class Sessions {
           "saveprice",
           "Neox | Role Price",
           "price",
-          "Price in Dark Coins",
+          "Price in Neo Coins",
           String(v.price || 100),
         );
       } else if (action === "saveprice") {

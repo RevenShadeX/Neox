@@ -19,7 +19,7 @@ test("every catalogue emoji mapping exists in the supplied 220-name pack manifes
 test("store dropdowns and displayed weapons use the same exact pack emoji", () => {
   const resolver=new EmojiResolver({});
   resolver.observeApplication([{name:"neox_holyblade",id:"123456789012345678"},{name:"neox_sword",id:"123456789012345679"}]);
-  const decorated=decoratePayload({embeds:[{description:"🗡️ **Crown sword** • 10,000,000 Dark Coins"}],components:[{type:1,components:[{type:3,custom_id:"shop",options:[{label:"Crown sword",value:"sword5",emoji:{name:"🗡️"}}]}]}]},resolver);
+  const decorated=decoratePayload({embeds:[{description:"🗡️ **Crown sword** • 10,000,000 Neo Coins"}],components:[{type:1,components:[{type:3,custom_id:"shop",options:[{label:"Crown sword",value:"sword5",emoji:{name:"🗡️"}}]}]}]},resolver);
   assert.ok(decorated.embeds[0].description.startsWith("<:neox_holyblade:123456789012345678>"));
   assert.equal(decorated.components[0].components[0].options[0].emoji.name,"neox_holyblade");
   assert.equal(decorated.components[0].components[0].options[0].emoji.id,"123456789012345678");

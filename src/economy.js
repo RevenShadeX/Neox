@@ -28,7 +28,7 @@ class Economy {
           "UPDATE players SET wallet=wallet+? WHERE id=? AND wallet+? BETWEEN 0 AND ?",
         )
         .run(delta, user, delta, MAX).changes,
-      delta < 0 ? "Not enough Dark Coins." : "Wallet limit reached.",
+      delta < 0 ? "Not enough Neo Coins." : "Wallet limit reached.",
     );
     g.sql("INSERT INTO ledger(user,delta,reason,at) VALUES(?,?,?,?)").run(
       user,
@@ -110,7 +110,7 @@ class Economy {
     const worst = wager * maximumMultiplier;
     assert(Number.isSafeInteger(worst), "Wager exceeds safe bounds.");
     const player = this.game.player(user);
-    assert(player.wallet >= wager, "Not enough Dark Coins.");
+    assert(player.wallet >= wager, "Not enough Neo Coins.");
     assert(
       player.wallet + worst - wager <= MAX,
       "Wallet limit reached for potential payout.",

@@ -27,7 +27,7 @@ function coinflipPayload(
     content: formatCoinflip(result, spinning, emojis),
     embeds: [],
     attachments: [],
-    files: spin ? [{ attachment: spin, name: "dark-coin-spin.gif" }] : [],
+    files: spin ? [{ attachment: spin, name: "neo-coin-spin.gif" }] : [],
     allowedMentions,
   };
 }
@@ -57,7 +57,7 @@ function levelUpPayload(level) {
       {
         color: 0xb91c32,
         title: "LEVEL UP!",
-        description: `<@${level.userId}> reached **Level ${level.newLevel}**!\n\n**You received:** ${level.reward.toLocaleString("en-US")} Dark Coins\n**Your balance:** ${level.balance.toLocaleString("en-US")} Dark Coins${level.pending ? `\n\n**Unclaimed coins:** ${level.pending.toLocaleString("en-US")}\nUse \`n levelrewards\` after making room in your wallet.` : ""}`,
+        description: `<@${level.userId}> reached **Level ${level.newLevel}**!\n\n**You received:** ${level.reward.toLocaleString("en-US")} Neo Coins\n**Your balance:** ${level.balance.toLocaleString("en-US")} Neo Coins${level.pending ? `\n\n**Unclaimed coins:** ${level.pending.toLocaleString("en-US")}\nUse \`n levelrewards\` after making room in your wallet.` : ""}`,
       },
     ],
     allowedMentions,

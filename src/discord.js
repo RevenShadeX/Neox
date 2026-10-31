@@ -89,15 +89,18 @@ function collectionCards(p, emojis) {
   return cards;
 }
 function dailyCard(p) {
+  const weekly = p.claimType === "weekly";
+  const supplies = p.supplies || [{ name: "Daily Cache", quantity: 1 }];
   return { content: "", embeds: [{
-    color: 0xb91c32, title: "🎁 DAILY SUPPLY DROP",
-    description: "**Claim successful**\nYour daily rewards have been added to your inventory.",
+    color: 0xb91c32, title: weekly ? "🎁 WEEKLY SUPPLY DROP" : "🎁 DAILY SUPPLY DROP",
+    description: `**Claim successful** • Global Level ${p.level || 1}\n${weekly ? "Random supplies have been saved to your inventory." : "Random rewards have been saved to your wallet and inventory."}`,
     fields: [
-      { name: "🪙 DARK COINS", value: `**+${p.reward.toLocaleString("en-US")}**`, inline: true },
-      { name: "📦 DAILY CACHE", value: "**+1**", inline: true },
+      ...(p.reward ? [{ name: "🪙 NEO COINS", value: `**+${p.reward.toLocaleString("en-US")}**`, inline: true }] : []),
+      { name: "📦 SUPPLIES", value: supplies.map(item => `${item.name} **×${item.quantity}**`).join("\n") },
+      ...(p.bounds && !weekly ? [{ name: "Your coin range", value: `${p.bounds.dailyMin.toLocaleString("en-US")}–${p.bounds.dailyMax.toLocaleString("en-US")} Neo Coins` }] : []),
       { name: "⏳ NEXT CLAIM", value: `<t:${Math.floor(p.nextAt / 1000)}:R>`, inline: false },
     ],
-    footer: { text: "NEOX • Return tomorrow for your next supply drop" },
+    footer: { text: "NEOX • Global levels improve your claim rewards" },
   }], allowedMentions: { parse: [] } };
 }
 function lootCards(p) {
@@ -275,6 +278,16 @@ function createClient(
       }
     };
     const p = output.presentation;
+    if (p?.kind === "ping") {
+      const started = performance.now();
+      const sent = await transport.show({ content: "🏓 Checking connection…", allowedMentions: UI.allowedMentions });
+      const latency = Math.max(0, Math.round(performance.now() - started));
+      const gateway = Number.isFinite(client.ws.ping) && client.ws.ping >= 0 ? `${Math.round(client.ws.ping)} ms` : "Not available yet";
+      const final = { content: `🏓 **Pong!**\nResponse: **${latency} ms**\nGateway heartbeat: **${gateway}**`, allowedMentions: UI.allowedMentions };
+      try { await transport.finish(sent, final); }
+      catch (error) { logError("Ping edit failed:", error); await transport.fallback(final); }
+      return;
+    }
     if (p?.kind === "modal") {
       await source.showModal(UI.modal(p));
       return;
@@ -327,7 +340,7 @@ function createClient(
           allowedMentions: UI.allowedMentions,
         });
       }
-    } else if (p?.kind === "daily") {
+    } else if (p?.kind === "claim" || p?.kind === "daily") {
       await transport.show(dailyCard(p));
     } else if (p?.kind === "collection") {
       const cards = collectionCards(p, emojis);
@@ -595,7 +608,7 @@ function createClient(
   });
   client.once(Events.ClientReady, () => {
     console.log(
-      `Neox online as ${client.user.tag}; ${Object.keys(commands).length} commands. Dark Coins: virtual only.`,
+      `Neox online as ${client.user.tag}; ${Object.keys(commands).length} commands. Neo Coins: virtual only.`,
     );
     const tick = () => {
       if (client.isReady())

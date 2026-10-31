@@ -133,7 +133,7 @@ test("global rules consent is required, persists across servers, and decline rel
   f.click(s, "agree");
   assert.equal(
     f.run("cash", [], A, { guildId: H }).content,
-    "🪙 **Dark Coins**\n👛 Wallet: **0**\n🏦 Bank: **0**",
+    "🪙 **Neo Coins**\n👛 Wallet: **0**\n🏦 Bank: **0**",
   );
   f.run("decline");
   assert.throws(
@@ -168,7 +168,8 @@ test("only daily, hunting and level rewards may create currency; direct mint cal
   const before = f.total();
   f.run("daily");
   const afterDaily = f.total();
-  assert.equal(afterDaily - before, 1200n);
+  assert.ok(afterDaily - before >= 1000n && afterDaily - before <= 1500n);
+  assert.equal(afterDaily - before, BigInt(f.store.sql("SELECT amount FROM economy_events WHERE source='daily'").get().amount));
   f.run("hunt");
   assert.ok(f.total() > afterDaily);
   const sources = f.store
@@ -1297,7 +1298,7 @@ test("global-shop component purchase failures are acknowledged and leave no part
   client.emit(Events.InteractionCreate, i);
   await flush();
   assert.equal(calls[0][0], "deferUpdate");
-  assert.match(calls[1][1].content, /enough Dark Coins/);
+  assert.match(calls[1][1].content, /enough Neo Coins/);
   assert.equal(f.g.qty(A, "food", "food"), 0);
 });
 test("role-shop Discord purchase validation is owner-bound and invokes durable recovery", async (t) => {

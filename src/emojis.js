@@ -3,7 +3,7 @@ const fallback = { coin: "🪙", heads: "💀", tails: "👑", spin: "🪙" };
 function readEmojiConfig(env = process.env) {
   const config = {};
   for (const [kind, key] of Object.entries({
-    coin: "DARK_COIN_EMOJI_ID",
+    coin: !!env.NEO_COIN_EMOJI_ID ? "NEO_COIN_EMOJI_ID" : "DARK_COIN_EMOJI_ID",
     heads: "HEADS_EMOJI_ID",
     tails: "TAILS_EMOJI_ID",
     spin: "SPINNING_COIN_EMOJI_ID",

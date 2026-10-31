@@ -136,7 +136,7 @@ test("daily card reflects the exact persisted 24-hour cooldown and rewards",t=>{
   const card=dailyCard(output.presentation);payloadPages(card).forEach(valid);
   const until=f.store.sql("SELECT until FROM cooldowns WHERE user=? AND command='daily'").get(A).until;
   assert.equal(output.presentation.nextAt,until);
-  assert.equal(f.game.player(A).wallet-before,1200);assert.equal(f.game.qty(A,"box","daily"),1);
+  assert.equal(f.game.player(A).wallet-before,output.presentation.reward);assert.equal(f.game.qty(A,"box","daily"),output.presentation.supplies[0].quantity);
   assert.ok(JSON.stringify(card).includes(`<t:${Math.floor(until/1000)}:R>`));
 });
 test("profile exposes real equipped gear and battle wins while rendering extreme names and numbers",async t=>{

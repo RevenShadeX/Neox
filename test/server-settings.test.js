@@ -152,7 +152,7 @@ test("actual prefix transport authorizes the server owner and immediately uses t
   f.tick();
   client.emit(Events.MessageCreate, msg("#balance"));
   await flush();
-  assert.match(sent[1].content, /Dark Coins/);
+  assert.match(sent[1].content, /Neo Coins/);
   f.tick();
   client.emit(Events.MessageCreate, msg("n balance"));
   await flush();
@@ -203,6 +203,7 @@ test("actual slash transport authorizes Administrator for prefix and role-shop m
 test("owner configures a server role; a regular member buys it and receives the role through the bot", async (t) => {
   const f = setup(t);
   f.run("daily", [], B);
+  const fundedBalance = f.g.player(B).wallet;
   const owner = serverPermissions({
       guildId: G,
       guild: { id: G, ownerId: A },
@@ -277,7 +278,7 @@ test("owner configures a server role; a regular member buys it and receives the 
   await flush();
   await flush();
   assert.ok(assigned.has(`${B}:${R}`));
-  assert.equal(f.g.player(B).wallet, 200);
+  assert.equal(f.g.player(B).wallet, fundedBalance - 1000);
   assert.equal(
     f.s.sql("SELECT status FROM role_purchases WHERE buyer=?").get(B).status,
     "delivered",

@@ -215,7 +215,7 @@ class ProfileRenderer {
         c.fillRect(215, 137, width, 4);
       }
       text(
-        `Dark Coins: ${profile.wallet.toLocaleString("en-US")}`,
+        `Neo Coins: ${profile.wallet.toLocaleString("en-US")}`,
         215,
         194,
         21,

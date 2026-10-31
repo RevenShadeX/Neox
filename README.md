@@ -1,6 +1,6 @@
 # Neox — Wispbyte release candidate
 
-Neox is an original dark-fantasy Discord game using **Dark Coins**. They are virtual, cannot be bought, have no cash value, and cannot be redeemed or traded for real money. One Node.js 24 application and one persistent SQLite database serve every Discord server. Player balances, inventories, XP, companions and agreements are global.
+Neox is an original dark-fantasy Discord game using **Neo Coins**. They are virtual, cannot be bought, have no cash value, and cannot be redeemed or traded for real money. One Node.js 24 application and one persistent SQLite database serve every Discord server. Player balances, inventories, XP, companions and agreements are global.
 
 ## Install and run
 
@@ -37,9 +37,9 @@ For a 512 MB host, optionally set `NODE_OPTIONS=--max-old-space-size=192` to lea
 
 ## Economy and funding policy
 
-**Daily rewards, monster hunting, global level-up rewards and casino winnings create coins.** Minting is centrally scoped and transaction-guarded. New accounts start with **zero** coins; existing balances are preserved. Daily pays 1,200 coins and a daily cache every 24 hours. Hunting rewards depend on rarity, with a 20-second cooldown. Global level rewards use the configured curve below.
+**Daily rewards, monster hunting, global level-up rewards and casino winnings create coins.** Minting is centrally scoped and transaction-guarded. New accounts start with **zero** coins; existing balances are preserved. Daily rolls 1,000–1,500 Neo Coins at global level 1; each extra global level adds 500 to both bounds. It also grants 1–(2 + floor((level−1)/5)) Daily Caches. Claims retain a 24-hour cooldown and use the global level before the claim awards XP. Hunting rewards depend on rarity, with a 20-second cooldown. Global level rewards use the configured curve below.
 
-Weekly gives two gem caches, work gives three Companion Rations, quests grant XP, battles/bosses grant progression, and collection milestones grant item caches. Releasing monsters, disposing of equipment and opening loot caches give **no direct currency**. Monster threat/value scores are collection metadata, not redemption prices. `pay` remains a compatibility command that explicitly rejects gifting. Equipment trades transfer existing coins for equipment. Own-wallet bank deposits/withdrawals remain available.
+Weekly grants 2–4 Gem Caches plus 1–2 uniformly chosen Weapon, Armor or Monster Caches at global level 1. Every five extra global levels raises both Gem Cache bounds and the bonus cache maximum by one. Weekly remains item-only with a seven-day cooldown. Work gives three Companion Rations, quests grant XP, battles/bosses grant progression, and collection milestones grant item caches. Releasing monsters, disposing of equipment and opening loot caches give **no direct currency**. Monster threat/value scores are collection metadata, not redemption prices. `pay` remains a compatibility command that explicitly rejects gifting. Equipment trades transfer existing coins for equipment. Own-wallet bank deposits/withdrawals remain available.
 
 ### Bot-paid gambling
 
@@ -69,7 +69,7 @@ Prefix and slash commands use the same services. Canonical names are registered 
 | duel | @user amount / random amount / accept / decline / cancel | Challenge a server member to a fair dice duel |
 | help | [command\|category] | Categorized guide, aliases, syntax and examples |
 | cash (balance, bal, wallet) | — | Wallet and bank |
-| deposit (dep) | amount / all | Move Dark Coins into your bank |
+| deposit (dep) | amount / all | Move Neo Coins into your bank |
 | withdraw (with) | amount / all | Withdraw banked coins |
 | pay | @user amount | Direct currency gifting is disabled |
 | weekly | — | Claim weekly item supplies |
@@ -83,10 +83,10 @@ Prefix and slash commands use the same services. Canonical names are registered 
 | history | [page] | Recent wallet transactions |
 | economy | — | Global economy totals |
 | leaderboard (lb, top) | [wealth / hunt / battle / xp] [page] | Global player rankings |
-| hunt (h) | — | Hunt monsters and earn Dark Coins and XP |
+| hunt (h) | — | Hunt monsters and earn Neo Coins and XP |
 | zoo (monsters) | [page] | Your monster collection |
 | animals (bestiary) | [page / monster-id] | Monster catalogue and probabilities |
-| sellanimals (release, sellmonsters) | monster-id / all [quantity] | Release duplicate monsters; no Dark Coin reward |
+| sellanimals (release, sellmonsters) | monster-id / all [quantity] | Release duplicate monsters; no Neo Coin reward |
 | huntstats | — | Hunting progression |
 | collection | [claim] | Discover species and claim milestones |
 | inventory (inv, i) | [page] | Items and equipment |
@@ -108,7 +108,7 @@ Prefix and slash commands use the same services. Canonical names are registered 
 | pet | [monster-id] | Select a collected monster companion |
 | feed | [quantity] | Train your companion with food |
 | battle | [@user] | Fight an expedition or a ranked rival |
-| trade | @user gear-id price | Offer equipment for Dark Coins (10 minutes) |
+| trade | @user gear-id price | Offer equipment for Neo Coins (10 minutes) |
 | trades | — | Your incoming and outgoing offers |
 | accept | trade-id | Accept an equipment offer |
 | cancel | trade-id | Cancel your outgoing offer |
@@ -180,7 +180,7 @@ Global XP defaults per completed action: coinflip 2, hunt 2, battle 2, daily 5, 
 - Runtime: `DATABASE_PATH=./data/neox.sqlite`, `DEFAULT_PREFIX=n`, `MAX_BET=100000`, `MAINTENANCE_INTERVAL_SECONDS=300` (30–3600).
 - Curve: `LEVEL_XP_BASE=20000`, `LEVEL_XP_GROWTH=1.15`, `LEVEL_REWARD_BASE=10000`, `LEVEL_REWARD_GROWTH=1.10`. Invalid/unsafe curves fail startup. Changing a curve preserves total XP and never repays already-rewarded level numbers.
 - XP: `XP_REWARD_COINFLIP`, `XP_REWARD_BATTLE`, `XP_REWARD_HUNT`, `XP_REWARD_DAILY`, `XP_REWARD_WEEKLY`, `XP_REWARD_QUEST`, `XP_REWARD_BOSS` and matching `XP_COOLDOWN_<SOURCE>_SECONDS`. Set reward 0 to disable. Limits: reward 0–1,000,000; cooldown 0–86,400 seconds.
-- Optional emoji IDs: `DARK_COIN_EMOJI_ID`, `HEADS_EMOJI_ID`, `TAILS_EMOJI_ID`, `SPINNING_COIN_EMOJI_ID`. Only available, permission-allowed emojis are used across servers; Unicode is the fallback. No guild-specific IDs are hardcoded.
+- Optional emoji IDs: `NEO_COIN_EMOJI_ID` (legacy `DARK_COIN_EMOJI_ID` remains supported), `HEADS_EMOJI_ID`, `TAILS_EMOJI_ID`, `SPINNING_COIN_EMOJI_ID`. Only available, permission-allowed emojis are used across servers; Unicode is the fallback. No guild-specific IDs are hardcoded.
 
 ## Data compatibility, storage and verification
 
@@ -231,6 +231,9 @@ Durable settings reduce loss risk but cannot replace off-host backups or protect
 
 Anyone can use `n help` or `/help` before accepting the game rules. The guide lists all registered commands by category and shows this server's current prefix. If the server uses `!`, use `!help` instead.
 
+- `n ping` / `n p` reports response time and Discord Gateway latency. It works before accepting the rules.
+- Every command has a collision-checked shortcut listed in `n help command`, including `n d`, `n wk`, `n bt`, `n bs`, `n pr`, and `n up`. Existing aliases and canonical slash commands remain available.
+- `n help daily` and `n help weekly` explain random rewards, global-level scaling and claim cooldowns.
 - `n help games` lists coinflip, dice, slots and duels with descriptions.
 - `n help cf` shows syntax, aliases, permissions and a wager example; `n help coin flip` works too.
 - `n help battle`, `n help boss`, and `n help combat` explain fight preparation, cooldowns, stage progression, XP, cache drops, repairs, and automatic player battles.

@@ -1,6 +1,7 @@
 "use strict";
 
 const commands = {
+  ping: { description: "Check bot response time and Discord Gateway latency" },
   rules: { description: "Read Neox game rules and currency policy" },
   agree: { description: "Accept the game rules to start playing" },
   decline: { description: "Decline game rules and keep gameplay locked" },
@@ -16,7 +17,7 @@ const commands = {
   deposit: {
     aliases: ["dep"],
     usage: "amount|all",
-    description: "Move Dark Coins into your bank",
+    description: "Move Neo Coins into your bank",
   },
   withdraw: {
     aliases: ["with"],
@@ -25,9 +26,9 @@ const commands = {
   },
   pay: {
     usage: "@user amount",
-    description: "Send Dark Coins to another player with confirmation",
+    description: "Send Neo Coins to another player with confirmation",
   },
-  weekly: { description: "Claim weekly item supplies" },
+  weekly: { description: "Claim randomized weekly supplies that scale with global level" },
   work: { description: "Work for companion supplies" },
   treasury: {
     usage: "[fund amount]",
@@ -43,7 +44,7 @@ const commands = {
     description: "Your recent role purchase and recovery statuses",
   },
   refunds: { aliases: ["rf"], description: "Claim role-purchase refunds held for wallet space" },
-  daily: { aliases: ["d"], description: "Claim your daily reward" },
+  daily: { aliases: ["d"], description: "Claim random Neo Coins and Daily Caches, scaled by global level" },
   history: { usage: "[page]", description: "Recent wallet transactions" },
   economy: { description: "Global economy totals" },
   leaderboard: {
@@ -53,7 +54,7 @@ const commands = {
   },
   hunt: {
     aliases: ["h"],
-    description: "Hunt monsters and earn Dark Coins and XP",
+    description: "Hunt monsters and earn Neo Coins and XP",
   },
   zoo: {
     aliases: ["monsters"],
@@ -66,7 +67,7 @@ const commands = {
     description: "Monster catalogue and probabilities",
   },
   sacrifice: { aliases: ["sc", "nsc"], usage: "monster-id|all|rarity [quantity]", description: "Sacrifice duplicate monsters for Rift Essence" },
-  repair: { usage: "gear-id|all", description: "Restore damaged equipment using Dark Coins" },
+  repair: { usage: "gear-id|all", description: "Restore damaged equipment using Neo Coins" },
   infuse: { usage: "armor-gear-id [essence]", description: "Use Rift Essence to increase armor defense (max +200)" },
   sellanimals: {
     aliases: ["release", "sellmonsters", "sm", "sa"],
@@ -124,7 +125,7 @@ const commands = {
   },
   trade: {
     usage: "@user gear-id price",
-    description: "Offer equipment for Dark Coins (10 minutes)",
+    description: "Offer equipment for Neo Coins (10 minutes)",
   },
   trades: { description: "Your incoming and outgoing offers" },
   accept: { usage: "trade-id", description: "Accept an equipment offer" },
@@ -170,7 +171,26 @@ const commands = {
   boss: { description: "Challenge the Sovereign of the Rift" },
   event: { description: "Current global hunting event" },
 };
+// Explicit shortcuts keep parsing predictable; the shared registry rejects collisions.
+const shortcuts = {
+  ping: "p", rules: "r", agree: "ag", decline: "dec", duel: "dl", help: "he",
+  cash: "c", deposit: "dep", withdraw: "wd", pay: "py", weekly: "wk", work: "wo",
+  treasury: "trsy", roleshop: "rs", roleshopadmin: "rsa", rolepurchases: "rp",
+  refunds: "rf", daily: "d", history: "hi", economy: "eco", leaderboard: "lb",
+  hunt: "h", zoo: "z", animals: "an", sacrifice: "sc", repair: "rep", infuse: "inf",
+  sellanimals: "sa", huntstats: "hs", collection: "col", inventory: "i", gems: "g",
+  activate: "act", craft: "cr", upgrade: "up", enhance: "en", equipment: "eq",
+  armors: "ar", weapons: "w", equip: "e", unequip: "uneq", compare: "cmp", shop: "sh",
+  buy: "b", sell: "s", boxes: "bx", open: "o", boxinfo: "bi", pet: "pt", feed: "fd",
+  battle: "bt", trade: "tr", trades: "tls", accept: "acc", cancel: "can", cf: "f",
+  slots: "sl", dice: "di", prefix: "px", profile: "pr", level: "lvl", rank: "rk",
+  levels: "ls", levelannouncements: "la", levelrewards: "lr", quest: "q", boss: "bs", event: "ev",
+};
+for (const [name, shortcut] of Object.entries(shortcuts)) {
+  commands[name].aliases = [...new Set([...(commands[name].aliases || []), shortcut])];
+}
 const argumentCounts = {
+  ping: [0, 0],
   rules: [0, 0],
   agree: [0, 0],
   decline: [0, 0],
@@ -296,6 +316,7 @@ function normalizeArguments(command, args) {
 }
 module.exports = {
   commands,
+  shortcuts,
   argumentCounts,
   registry,
   alias,

@@ -120,6 +120,7 @@ for (const [content, canonical] of requestedOther)
     }
   });
 const validArgs = {
+  ping: [],
   sacrifice: ["A001", "1"], repair: ["ALL"], infuse: ["3", "1"], weapons: [], armors: [],
   rules: [],
   agree: [],
@@ -343,7 +344,7 @@ test("prefix matching is literal and honors multi-character and server settings"
     assert.equal(f.message("zHUNT").content.includes("HUNT COMPLETE"), true);
     assert.equal(f.game.getPrefix("66666"), "n");
     f.run("prefix", ["$."]);
-    assert.equal(f.message("$.BALANCE").content.includes("Dark Coins"), true);
+    assert.equal(f.message("$.BALANCE").content.includes("Neo Coins"), true);
     assert.equal(parsePrefix("$.cashier", "$."), null);
     assert.equal(parsePrefix("n hunt", ""), null);
     assert.equal(parsePrefix(null), null);
@@ -552,12 +553,12 @@ test("animation changes GIF to the committed skull/crown result without rerollin
         },
         { sleep: async (ms) => assert.equal(ms, 850) },
       );
-      assert.equal(calls[0].files[0].name, "dark-coin-spin.gif");
+      assert.equal(calls[0].files[0].name, "neo-coin-spin.gif");
       assert.deepEqual(calls[0].embeds, []);
       assert.match(calls[1].content, outcome ? /HEADS!/ : /TAILS!/);
       assert.deepEqual(calls[1].attachments, []);
       assert.equal(f.game.player(A).wallet, wallet);
-      assert.match(calls[1].content, /Dark Coins/);
+      assert.match(calls[1].content, /Neo Coins/);
     } finally {
       f.close();
     }
@@ -771,7 +772,7 @@ test("concurrent coinflip replies reuse the same immutable animation buffer", ()
       two = coinflipPayload(result, true);
     assert.ok(Buffer.isBuffer(one.files[0].attachment));
     assert.strictEqual(one.files[0].attachment, two.files[0].attachment);
-    assert.equal(one.files[0].name, "dark-coin-spin.gif");
+    assert.equal(one.files[0].name, "neo-coin-spin.gif");
   } finally {
     f.close();
   }

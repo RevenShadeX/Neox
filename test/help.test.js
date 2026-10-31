@@ -103,7 +103,7 @@ test("selling help distinguishes bulk release, exact quantities, gear disposal a
   assert.match(guide("!", "selling").content, /without a confirmation/);
   assert.match(guide("!", "selling").content, /! sacrifice all/);
   assert.match(guide("!", "selling").content, /! trade @user 42 100/);
-  assert.doesNotMatch(commands.sellanimals.description, /for Dark Coins/);
+  assert.doesNotMatch(commands.sellanimals.description, /for Neo Coins/);
   assert.deepEqual(guide("!", "sell all"), guide("!", "sell"));
 });
 test("sacrifice, infusion and cache help explain costs, limits and inventory safety", () => {

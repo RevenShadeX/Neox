@@ -518,11 +518,11 @@ test("compact coinflip has actual name, spent amount, chosen side and net outcom
   assert.deepEqual(initial.embeds, []);
   assert.equal(
     initial.content,
-    "**Kael** spent 🪙 **100 Dark Coins** and chose **heads**.\n\nThe Dark Coin spins... 🪙",
+    "**Kael** spent 🪙 **100 Neo Coins** and chose **heads**.\n\nThe Neo Coin spins... 🪙",
   );
   assert.equal(
     formatCoinflip(result),
-    "**Kael** spent 🪙 **100 Dark Coins** and chose **heads**.\n\n💀 **HEADS!**\n\n**Kael won 100 Dark Coins!**",
+    "**Kael** spent 🪙 **100 Neo Coins** and chose **heads**.\n\n💀 **HEADS!**\n\n**Kael won 100 Neo Coins!**",
   );
   const safe = {
     ...result,

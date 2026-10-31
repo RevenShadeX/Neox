@@ -1,5 +1,6 @@
 "use strict";
 const C = require("./content");
+const { rollClaim } = require("./claim-rewards");
 const { itemIcon, inventoryLabel } = require("./item-display");
 const { validPrefix } = require("./prefix");
 const { guide } = require("./help");
@@ -307,7 +308,7 @@ class Game {
       "Argument too long.",
     );
     return this.request(ctx, (player) => {
-      if (!["help", "rules", "agree", "decline", "refunds"].includes(name))
+      if (!["ping", "help", "rules", "agree", "decline", "refunds"].includes(name))
         this.requireAgreement(player.id);
       if (!["rules", "agree", "decline"].includes(name))
         this.cooldown(player.id, "command", 1000);
@@ -352,13 +353,9 @@ class Game {
         const recipient = userId(a[0]);
         const amount = n(a[1]);
         assert(recipient !== id, "You cannot pay yourself.");
-        assert(p.wallet >= amount, "Not enough Dark Coins.");
+        assert(p.wallet >= amount, "Not enough Neo Coins.");
         return this.sessions.create("payment", ctx, { recipient, amount });
       }
-      case "weekly":
-        this.cooldown(id, "weekly", 604800000);
-        this.item(id, "box", "gem", 2);
-        return "🎁 **Weekly supplies claimed!**\n💎 Two gem boxes added to your inventory.";
       case "work":
         this.cooldown(id, "work", 3600000);
         this.item(id, "food", "food", 3);
@@ -371,12 +368,12 @@ class Game {
           );
           const amount = n(a[1]);
           this.economy.spend(id, amount, "voluntary treasury funding");
-          return `Moved ${fmt(amount)} existing Dark Coins to the legacy treasury. This contribution is not refundable.`;
+          return `Moved ${fmt(amount)} existing Neo Coins to the legacy treasury. This contribution is not refundable.`;
         }
-        return `Legacy treasury (not used for gambling): ${fmt(this.economy.treasury())} Dark Coins. Starts at zero; funded only by existing coins from purchases, costs and voluntary contributions. No real-world value.`;
+        return `Legacy treasury (not used for gambling): ${fmt(this.economy.treasury())} Neo Coins. Starts at zero; funded only by existing coins from purchases, costs and voluntary contributions. No real-world value.`;
       }
       case "refunds":
-        return `Returned ${fmt(this.roleShop.claimRefund(id))} held refund Dark Coins to your wallet.`;
+        return `Returned ${fmt(this.roleShop.claimRefund(id))} held refund Neo Coins to your wallet.`;
       case "roleshop":
         assert(ctx.guildId, "Use this in a server.");
         assert(
@@ -404,7 +401,7 @@ class Game {
           rows
             .map(
               (r) =>
-                `${r.id} • <@&${r.role}> • ${fmt(r.price)} Dark Coins • ${r.status}`,
+                `${r.id} • <@&${r.role}> • ${fmt(r.price)} Neo Coins • ${r.status}`,
             )
             .join("\n") || "No recent role purchases in this server."
         );
@@ -418,10 +415,12 @@ class Game {
           ? this.duels.join(ctx, wager)
           : this.duels.create(ctx, userId(a[0]), wager);
       }
+      case "ping":
+        return { content: "Pong!", completed: false, presentation: { kind: "ping" } };
       case "help":
         return guide(this.getPrefix(ctx.guildId), a[0]);
       case "cash":
-        return `🪙 **Dark Coins**\n👛 Wallet: **${fmt(p.wallet)}**\n🏦 Bank: **${fmt(p.bank)}**`;
+        return `🪙 **Neo Coins**\n👛 Wallet: **${fmt(p.wallet)}**\n🏦 Bank: **${fmt(p.bank)}**`;
       case "deposit":
       case "withdraw": {
         assert(a.length === 1, `Usage: ${name} amount|all`);
@@ -438,14 +437,22 @@ class Game {
         this.sql(
           "INSERT INTO ledger(user,delta,reason,at) VALUES(?,?,?,?)",
         ).run(id, deposit ? -amount : amount, name, this.clock());
-        return `✅ ${deposit ? "Deposited" : "Withdrew"} **${fmt(amount)} Dark Coins**.\n👛 Wallet: ${fmt(this.player(id).wallet)} • 🏦 Bank: ${fmt(this.player(id).bank)}`;
+        return `✅ ${deposit ? "Deposited" : "Withdrew"} **${fmt(amount)} Neo Coins**.\n👛 Wallet: ${fmt(this.player(id).wallet)} • 🏦 Bank: ${fmt(this.player(id).bank)}`;
       }
-      case "daily": {
-        this.cooldown(id, "daily", 86400000);
-        const reward = 1200;
-        this.money(id, reward, "daily");
-        this.item(id, "box", "daily", 1);
-        return { content: `Daily reward: ${fmt(reward)} Dark Coins and 1 Daily Cache`, presentation: { kind: "daily", reward, nextAt: this.clock() + 86400000 } };
+      case "daily":
+      case "weekly": {
+        const duration = name === "daily" ? 86400000 : 604800000;
+        this.cooldown(id, name, duration);
+        const globalLevel = this.progression.curve.progress(p.global_xp).level;
+        const claim = rollClaim(name, globalLevel, this.rng);
+        if (claim.reward) this.money(id, claim.reward, name);
+        for (const item of claim.supplies) this.item(id, item.kind, item.id, item.quantity);
+        return {
+          content: `${name === "daily" ? "Daily" : "Weekly"} reward • Level ${globalLevel}\n` +
+            (claim.reward ? `${fmt(claim.reward)} Neo Coins\n` : "") +
+            claim.supplies.map(item => `${item.name} ×${item.quantity}`).join("\n"),
+          presentation: { kind: "claim", claimType: name, ...claim, nextAt: this.clock() + duration },
+        };
       }
       case "history": {
         const page = a[0] ? n(a[0], 1, 100) : 1;
@@ -470,7 +477,7 @@ class Game {
         )
           .safeIntegers(true)
           .get().n;
-        return `${fmt(t.players)} players • ${fmt(t.wallet)} wallet Dark Coins • ${fmt(t.bank)} bank Dark Coins\nTreasury: ${fmt(this.economy.treasury())} • role escrow: ${fmt(held)} • held refunds: ${fmt(refunds)}\nNew coins: daily, monster hunting, global levels and casino winnings. No real-world value.`;
+        return `${fmt(t.players)} players • ${fmt(t.wallet)} wallet Neo Coins • ${fmt(t.bank)} bank Neo Coins\nTreasury: ${fmt(this.economy.treasury())} • role escrow: ${fmt(held)} • held refunds: ${fmt(refunds)}\nNew coins: daily, monster hunting, global levels and casino winnings. No real-world value.`;
       }
       case "leaderboard": {
         const mode = a[0] || "wealth";
@@ -555,7 +562,7 @@ class Game {
           if (rows.length) sections.push(`**${rarity.toUpperCase()}**\n${rows.map(({ animal, qty }) => `${animal.id} • ${animal.name}${qty > 1 ? ` ×${qty}` : ""}`).join("\n")}`);
         }
         const boosts = Object.entries(b).map(([kind, bonus]) => `${kind} +${Math.round(bonus * 100)}%`).join(" • ");
-        return `**NEOX • HUNT COMPLETE**\n\n${sections.join("\n\n")}\n\n**REWARDS**\n🪙 +${fmt(reward)} Dark Coins • ✨ +${fmt(xp)} hunting XP\n🔥 Streak ${streak} • 🎯 Hunting level ${level(this.player(id))}${boosts ? `\n💎 Active gems: ${boosts}` : ""}\n\nManual hunt • 20s cooldown`;
+        return `**NEOX • HUNT COMPLETE**\n\n${sections.join("\n\n")}\n\n**REWARDS**\n🪙 +${fmt(reward)} Neo Coins • ✨ +${fmt(xp)} hunting XP\n🔥 Streak ${streak} • 🎯 Hunting level ${level(this.player(id))}${boosts ? `\n💎 Active gems: ${boosts}` : ""}\n\nManual hunt • 20s cooldown`;
       }
       case "zoo": {
         const rows = this.sql(
@@ -625,7 +632,7 @@ class Game {
         assert(repaired, "Equipment is already at full condition.");
         this.money(id, -cost, "equipment repairs");
         for (const g of rows) this.sql("INSERT INTO gear_condition(gear,condition) VALUES(?,100) ON CONFLICT(gear) DO UPDATE SET condition=100").run(g.id);
-        return `**NEOX • EQUIPMENT REPAIRED**\nItems repaired: **${repaired}**\nCost: **${fmt(cost)} Dark Coins**\nCondition restored to **100%**.`;
+        return `**NEOX • EQUIPMENT REPAIRED**\nItems repaired: **${repaired}**\nCost: **${fmt(cost)} Neo Coins**\nCondition restored to **100%**.`;
       }
       case "infuse": {
         const g = this.gear(id, a[0]);
@@ -659,7 +666,7 @@ class Game {
         }
         assert(count > 0, "No monsters available to sell.");
         // Disposal preserves the documented economy: it cannot mint currency.
-        return `Released **${fmt(count)} monsters**. No Dark Coins created. Discoveries are preserved; bulk release keeps one of each species.`;
+        return `Released **${fmt(count)} monsters**. No Neo Coins created. Discoveries are preserved; bulk release keeps one of each species.`;
       }
       case "huntstats":
         return `Level ${level(p)} • ${fmt(p.xp)} hunting XP\n${fmt(p.hunts)} hunts • streak ${p.streak}/50\n${this.sql("SELECT COUNT(*) AS n FROM discoveries WHERE user=?").get(id).n}/200 species discovered\nNext level: ${fmt(level(p) ** 2 * 100)} XP`;
@@ -755,7 +762,7 @@ class Game {
           this.item(id, "gem", prev, -3);
           this.money(id, -gem.tier * 200, "gem crafting");
           this.item(id, "gem", gem.id, 1);
-          return `Crafted ${gem.id} from 3 ${prev} and ${gem.tier * 200} Dark Coins.`;
+          return `Crafted ${gem.id} from 3 ${prev} and ${gem.tier * 200} Neo Coins.`;
         }
         if (name === "craft") {
           const e = find(C.equipment, a[0]);
@@ -771,7 +778,7 @@ class Game {
         this.item(id, "gem", "xp1", -1);
         this.money(id, -price, "equipment upgrade");
         this.sql("UPDATE gear SET level=level+1 WHERE id=?").run(g.id);
-        return `#${g.id} is now level ${g.level + 1}. Cost: ${price} Dark Coins and xp1.`;
+        return `#${g.id} is now level ${g.level + 1}. Cost: ${price} Neo Coins and xp1.`;
       }
       case "enhance": {
         const g = this.gear(id, a[0]);
@@ -797,7 +804,7 @@ class Game {
       }
       case "equipment": {
         const s = this.stats(id);
-        return `Attack ${s.attack} • Defense ${s.defense}\n${s.rows.map((g) => `#${g.id} ${g.item} L${g.level} +${g.enhance} [${g.slot}]${g.slot === "armor" ? ` • Infused +${this.sql("SELECT defense FROM armor_infusions WHERE gear=?").get(g.id)?.defense || 0}/200 DEF` : ""}`).join("\n") || "No equipment."}\nAbilities: ${s.abilities.join(", ") || "none"}\nUpgrades: xp1 + 250 × tier × current level Dark Coins. Enhancement: lucky1 × next enhancement + 500 × next enhancement Dark Coins. Craft: currency1 × max(1, rarity index) + 70% shop price.`;
+        return `Attack ${s.attack} • Defense ${s.defense}\n${s.rows.map((g) => `#${g.id} ${g.item} L${g.level} +${g.enhance} [${g.slot}]${g.slot === "armor" ? ` • Infused +${this.sql("SELECT defense FROM armor_infusions WHERE gear=?").get(g.id)?.defense || 0}/200 DEF` : ""}`).join("\n") || "No equipment."}\nAbilities: ${s.abilities.join(", ") || "none"}\nUpgrades: xp1 + 250 × tier × current level Neo Coins. Enhancement: lucky1 × next enhancement + 500 × next enhancement Neo Coins. Craft: currency1 × max(1, rarity index) + 70% shop price.`;
       }
       case "equip": {
         const g = this.gear(id, a[0]);
@@ -862,7 +869,7 @@ class Game {
             item.id,
             quantity,
           );
-        return `🛍️ Bought ${quantity} ${item.name || item.id} for **${fmt(item.price * quantity)} Dark Coins**.\n🎒 Added to your inventory.`;
+        return `🛍️ Bought ${quantity} ${item.name || item.id} for **${fmt(item.price * quantity)} Neo Coins**.\n🎒 Added to your inventory.`;
       }
       case "sell": {
         if (a[0] === "all" || C.rarities.some((r) => r.toLowerCase() === a[0]) ||
@@ -877,8 +884,8 @@ class Game {
           g.enhance * 100;
         this.sql("DELETE FROM trades WHERE gear=?").run(g.id);
         this.sql("DELETE FROM gear WHERE id=?").run(g.id);
-        // Equipment disposal is not a source of new Dark Coins.
-        return `Disposed of equipment #${g.id}. No Dark Coins created.`;
+        // Equipment disposal is not a source of new Neo Coins.
+        return `Disposed of equipment #${g.id}. No Neo Coins created.`;
       }
       case "boxes":
         return (
@@ -895,7 +902,7 @@ class Game {
         const tierTotal = b.tierWeights
           .slice(b.minTier || 0, b.maxTier + 1)
           .reduce((s, w) => s + w, 0);
-        return `${b.name} (${b.id}) • ${b.price} dc\nGuaranteed ${b.quantity[0]}–${b.quantity[1]} independent reward rolls (uniform).\nEach roll: ${b.drops.map(([k, w]) => `${k === "animal" ? "monster" : k} ${w}%`).join(", ")}.\nMonster/equipment rarity: ${b.tierWeights
+        return `${b.name} (${b.id}) • ${b.price} Neo Coins\nGuaranteed ${b.quantity[0]}–${b.quantity[1]} independent reward rolls (uniform).\nEach roll: ${b.drops.map(([k, w]) => `${k === "animal" ? "monster" : k} ${w}%`).join(", ")}.\nMonster/equipment rarity: ${b.tierWeights
           .slice(b.minTier || 0, b.maxTier + 1)
           .map(
             (w, i) =>
@@ -1106,7 +1113,7 @@ class Game {
         const reward = 0;
         if (stage !== null && won && !draw && stage < 1000000000)
           this.sql("INSERT INTO battle_stages(user,stage) VALUES(?,?) ON CONFLICT(user) DO UPDATE SET stage=excluded.stage").run(id, stage + 1);
-        // Battles grant progression only; no new Dark Coins.
+        // Battles grant progression only; no new Neo Coins.
         this.sql(
           "UPDATE players SET battles_total=battles_total+1 WHERE id=?",
         ).run(id);
@@ -1132,7 +1139,7 @@ class Game {
           );
         }
         return {
-          content: `${enemy ? `Ranked spar against <@${enemyId}>` : boss ? "Boss battle against the Sovereign of the Rift" : `Expedition Stage ${stage} against ${elite ? "the Eternal Rift Sovereign" : stageBoss ? "a Rift Overlord" : "a Rift Sentinel"}`}\n${log.join("\n")}\n${draw ? "Draw" : won ? "Victory" : "Defeat"} • +0 Dark Coins • ${won ? 35 : 15} hunting XP\nRanked sparring uses saved equipment; no opponent coins are taken.\nEquipped gear loses 1–4% condition per fight. Repair with n repair all.${battleLoot}`,
+          content: `${enemy ? `Ranked spar against <@${enemyId}>` : boss ? "Boss battle against the Sovereign of the Rift" : `Expedition Stage ${stage} against ${elite ? "the Eternal Rift Sovereign" : stageBoss ? "a Rift Overlord" : "a Rift Sentinel"}`}\n${log.join("\n")}\n${draw ? "Draw" : won ? "Victory" : "Defeat"} • +0 Neo Coins • ${won ? 35 : 15} hunting XP\nRanked sparring uses saved equipment; no opponent coins are taken.\nEquipped gear loses 1–4% condition per fight. Repair with n repair all.${battleLoot}`,
           presentation: {
             kind: "card", command: name,
             combat: { playerName: cleanName(ctx.displayName || p.display_name), playerGear: me.rows.map(g => ({ ...C.equipment.find(e => e.id === g.item), gearId: g.id })), playerAbilities: me.abilities, opponentAbilities: foe.abilities, won, draw, weaponCache: !!battleLoot, hp: Math.max(0, hp), enemyHP: Math.max(0, ehp), userId: id, enemyId, playerLevel: level(p), opponentLevel: enemy ? level(enemy) : null, playerAttack: me.attack, opponentAttack: foe.attack, playerDefense: me.defense, opponentDefense: foe.defense,
@@ -1169,7 +1176,7 @@ class Game {
         const result = this.sql(
           "INSERT INTO trades(seller,buyer,gear,price,expires) VALUES(?,?,?,?,?)",
         ).run(id, target, g.id, price, this.clock() + 600000);
-        return `Offer #${result.lastInsertRowid}: <@${target}> can accept #${g.id} for ${fmt(price)} Dark Coins within 10 minutes using accept ${result.lastInsertRowid}. No payment until acceptance.`;
+        return `Offer #${result.lastInsertRowid}: <@${target}> can accept #${g.id} for ${fmt(price)} Neo Coins within 10 minutes using accept ${result.lastInsertRowid}. No payment until acceptance.`;
       }
       case "trades":
         return (
@@ -1179,7 +1186,7 @@ class Game {
             .all(id, id, this.clock())
             .map(
               (t) =>
-                `Offer #${t.id} • gear #${t.gear} • <@${t.seller}> → <@${t.buyer}> • ${fmt(t.price)} dc • ${Math.ceil((t.expires - this.clock()) / 60000)}m`,
+                `Offer #${t.id} • gear #${t.gear} • <@${t.seller}> → <@${t.buyer}> • ${fmt(t.price)} Neo Coins • ${Math.ceil((t.expires - this.clock()) / 60000)}m`,
             )
             .join("\n") || "No active offers."
         );
@@ -1193,7 +1200,7 @@ class Game {
         this.economy.transfer(id, t.seller, t.price, `trade ${t.id}`);
         this.sql("DELETE FROM trades WHERE id=?").run(t.id);
         this.sql("UPDATE gear SET user=? WHERE id=?").run(id, t.gear);
-        return `Trade #${t.id} complete. Received gear #${t.gear} for ${fmt(t.price)} Dark Coins.`;
+        return `Trade #${t.id} complete. Received gear #${t.gear} for ${fmt(t.price)} Neo Coins.`;
       }
       case "cancel": {
         const t = this.sql("DELETE FROM trades WHERE id=? AND seller=?").run(
@@ -1217,7 +1224,7 @@ class Game {
               ? Math.min(Math.floor(p.wallet / 2), this.maxBet)
               : a[0];
         const wager = n(String(requested), 1, this.maxBet);
-        assert(wager <= p.wallet, "Not enough Dark Coins.");
+        assert(wager <= p.wallet, "Not enough Neo Coins.");
         this.cooldown(id, "gamble", 5000);
         const settled = this.economy.gamble(id, wager, 2, "coinflip", () => {
           const sideResult = (
@@ -1267,7 +1274,7 @@ class Game {
             result = roll >= 4 ? "high" : "low";
           return { roll, result, multiplier: choice === result ? 2 : 0 };
         });
-        return `🎲 Rolled ${settled.roll} (${settled.result.toUpperCase()}). ${settled.multiplier ? "Won" : "Lost"} ${fmt(wager)} Dark Coins net. High 4–6 / low 1–3: 50% each; total winning payout 2×, loss 0.`;
+        return `🎲 Rolled ${settled.roll} (${settled.result.toUpperCase()}). ${settled.multiplier ? "Won" : "Lost"} ${fmt(wager)} Neo Coins net. High 4–6 / low 1–3: 50% each; total winning payout 2×, loss 0.`;
       }
       case "slots": {
         const wager = n(a[0], 1, this.maxBet);
@@ -1282,7 +1289,7 @@ class Game {
           return { reels, multiplier };
         });
         return {
-          content: `${settled.reels.map((r) => ["🌑", "🔮", "🦇", "💎", "⚔️", "👑"][r]).join(" ")}\nReturned ${fmt(settled.payout)} Dark Coins; net ${fmt(settled.payout - wager)}. 216 equiprobable outcomes: triple 6/216 pays 10×; pair 90/216 returns 1×; other 120/216 pays 0. RTP 69.44%. Winnings paid directly by Neox.`,
+          content: `${settled.reels.map((r) => ["🌑", "🔮", "🦇", "💎", "⚔️", "👑"][r]).join(" ")}\nReturned ${fmt(settled.payout)} Neo Coins; net ${fmt(settled.payout - wager)}. 216 equiprobable outcomes: triple 6/216 pays 10×; pair 90/216 returns 1×; other 120/216 pays 0. RTP 69.44%. Winnings paid directly by Neox.`,
           presentation: { kind: "slots", wager, reels: settled.reels, payout: settled.payout, multiplier: settled.multiplier },
         };
       }
@@ -1329,7 +1336,7 @@ class Game {
           pendingRewards: player.pending_level_coins,
         };
         return {
-          content: `${markdownName(profile.displayName)} • Level ${progress.level} • Global rank #${rank}\n${fmt(progress.current)} / ${fmt(progress.required)} XP (${progress.percent.toFixed(2)}%) • ${fmt(progress.total)} total XP\nDark Coins: ${fmt(player.wallet)} wallet / ${fmt(player.bank)} bank\nHunts: ${fmt(profile.hunts)} • Battles: ${fmt(profile.battles)} • Coinflip wins: ${fmt(profile.coinflipWins)}\nPending level rewards: ${fmt(profile.pendingRewards)}`,
+          content: `${markdownName(profile.displayName)} • Level ${progress.level} • Global rank #${rank}\n${fmt(progress.current)} / ${fmt(progress.required)} XP (${progress.percent.toFixed(2)}%) • ${fmt(progress.total)} total XP\nNeo Coins: ${fmt(player.wallet)} wallet / ${fmt(player.bank)} bank\nHunts: ${fmt(profile.hunts)} • Battles: ${fmt(profile.battles)} • Coinflip wins: ${fmt(profile.coinflipWins)}\nPending level rewards: ${fmt(profile.pendingRewards)}`,
           presentation: { kind: "profile", profile },
         };
       }
@@ -1359,7 +1366,7 @@ class Game {
         this.sql(
           "UPDATE players SET pending_level_coins=pending_level_coins-? WHERE id=?",
         ).run(amount, id);
-        return `Collected ${fmt(amount)} Dark Coins in level rewards.`;
+        return `Collected ${fmt(amount)} Neo Coins in level rewards.`;
       }
       case "quest": {
         const day = Math.floor(this.clock() / 86400000);

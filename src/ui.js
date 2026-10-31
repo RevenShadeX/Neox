@@ -40,7 +40,7 @@ const embed = (title, description) =>
     .setTitle(title)
     .setDescription(description)
     .setFooter({
-      text: "Dark Coins are virtual • Never purchased or redeemed for money",
+      text: "Neo Coins are virtual • Never purchased or redeemed for money",
     });
 const cid = (s, action) => `nx:${s.id}:${s.version}:${action}`;
 function panel(game, s) {
@@ -51,7 +51,7 @@ function panel(game, s) {
   if (s.kind === "rules") {
     card = embed(
       "📜 Player Agreement",
-      "**Virtual currency:** Dark Coins have no cash value; no purchases, redemption, or real-money trading.\n\n**Chance:** Coinflip, dice, slots and duels use secure random outcomes. Winnings are never guaranteed. Casino winnings are paid directly by Neox.\n\n**Fair play:** No exploits, currency duplication, automation abuse, or alternate-account abuse.\n\n**Discord:** Follow Discord’s Terms, Community Guidelines and your server rules.\n\nAccept globally to unlock gameplay, or decline to remain locked.",
+      "**Virtual currency:** Neo Coins have no cash value; no purchases, redemption, or real-money trading.\n\n**Chance:** Coinflip, dice, slots and duels use secure random outcomes. Winnings are never guaranteed. Casino winnings are paid directly by Neox.\n\n**Fair play:** No exploits, currency duplication, automation abuse, or alternate-account abuse.\n\n**Discord:** Follow Discord’s Terms, Community Guidelines and your server rules.\n\nAccept globally to unlock gameplay, or decline to remain locked.",
     );
     components = [
       row(
@@ -62,7 +62,7 @@ function panel(game, s) {
   } else if (s.kind === "payment") {
     card = embed(
       "Confirm Payment",
-      `Send **${v.amount.toLocaleString("en-US")} Dark Coins** to <@${v.recipient}>?\n\nThis transfer is final. No coins will move until you confirm.`,
+      `Send **${v.amount.toLocaleString("en-US")} Neo Coins** to <@${v.recipient}>?\n\nThis transfer is final. No coins will move until you confirm.`,
     );
     components = [row(
       button(id("confirm"), "Confirm Payment", ButtonStyle.Danger),
@@ -70,7 +70,7 @@ function panel(game, s) {
     )];
   } else if (s.kind === "coinflip") {
     card = embed(
-      "🪙 Dark Coinflip",
+      "🪙 Neo Coinflip",
       "Pick Heads or Tails, then enter how many coins to bet.\n\nEach side has a **50% chance**. Win: get **2× your bet** back. Lose: lose your bet.",
     );
     components = [
@@ -103,7 +103,7 @@ function panel(game, s) {
       const shown = catalog.slice(page * PAGE, (page + 1) * PAGE);
       card = embed(
         "🛍️ Global Shop",
-        `**${v.category.toUpperCase()}** • Page ${page + 1}/${pages}\n\n${shown.map((x) => `${itemIcon(x)} ${markdownName(x.name || x.id)} • **${x.price.toLocaleString("en-US")} Dark Coins**`).join("\n")}\n\nChoose an item, enter a quantity, then confirm your purchase.`,
+        `**${v.category.toUpperCase()}** • Page ${page + 1}/${pages}\n\n${shown.map((x) => `${itemIcon(x)} ${markdownName(x.name || x.id)} • **${x.price.toLocaleString("en-US")} Neo Coins**`).join("\n")}\n\nChoose an item, enter a quantity, then confirm your purchase.`,
       );
       components = [
         category,
@@ -116,7 +116,7 @@ function panel(game, s) {
                 label: (x.name || x.id).slice(0, 100),
                 emoji: itemIcon(x),
                 value: x.id,
-                description: `${x.price.toLocaleString("en-US")} Dark Coins`,
+                description: `${x.price.toLocaleString("en-US")} Neo Coins`,
               })),
             ),
         ),
@@ -137,7 +137,7 @@ function panel(game, s) {
               : "\nFood and supplies for your companion.";
       card = embed(
         v.stage === "confirm" ? "Confirm Purchase" : "Item Information",
-        `${itemIcon(selected)} **${markdownName(selected.name || selected.id)}**\nUnit price: **${v.price.toLocaleString("en-US")} Dark Coins**${details}${v.stage === "confirm" ? `\n\nQuantity: ${v.quantity}\nTotal: **${(v.price * v.quantity).toLocaleString("en-US")} Dark Coins**` : "\n\nChoose how many you want to buy."}`,
+        `${itemIcon(selected)} **${markdownName(selected.name || selected.id)}**\nUnit price: **${v.price.toLocaleString("en-US")} Neo Coins**${details}${v.stage === "confirm" ? `\n\nQuantity: ${v.quantity}\nTotal: **${(v.price * v.quantity).toLocaleString("en-US")} Neo Coins**` : "\n\nChoose how many you want to buy."}`,
       );
       components = [
         category,
@@ -183,7 +183,7 @@ function panel(game, s) {
     } else if (v.stage === "detail" && v.role) {
       card = embed(
         admin ? "Manage Role Listing" : "Confirm Role Purchase",
-        `🏷️ **${markdownName(v.name || "Role")}**\nPrice: **${v.price.toLocaleString("en-US")} Dark Coins**\n\n${admin ? "Edit the price or remove this server’s listing." : "Your coins are only kept if the role is successfully added. Otherwise, you get a refund."}`,
+        `🏷️ **${markdownName(v.name || "Role")}**\nPrice: **${v.price.toLocaleString("en-US")} Neo Coins**\n\n${admin ? "Edit the price or remove this server’s listing." : "Your coins are only kept if the role is successfully added. Otherwise, you get a refund."}`,
       );
       components = [
         row(
@@ -205,7 +205,7 @@ function panel(game, s) {
     } else {
       card = embed(
         admin ? "Server Role Shop Management" : "Server Role Shop",
-        `Shop: **${enabled ? "Enabled" : "Disabled"}** • Page ${page + 1}/${pages}\n\n${list.map((l) => `🏷️ ${markdownName(l.name)} • ${l.price.toLocaleString("en-US")} Dark Coins`).join("\n") || "No listings configured."}\n\n${admin ? "Management requires Manage Server and Manage Roles on every action." : "Only listings from this server can be purchased."}`,
+        `Shop: **${enabled ? "Enabled" : "Disabled"}** • Page ${page + 1}/${pages}\n\n${list.map((l) => `🏷️ ${markdownName(l.name)} • ${l.price.toLocaleString("en-US")} Neo Coins`).join("\n") || "No listings configured."}\n\n${admin ? "Management requires Manage Server and Manage Roles on every action." : "Only listings from this server can be purchased."}`,
       );
       if (admin)
         components.push(
@@ -230,7 +230,7 @@ function panel(game, s) {
                   label: l.name.slice(0, 100),
                   emoji: "🏷️",
                   value: l.role,
-                  description: `${l.price.toLocaleString("en-US")} Dark Coins`,
+                  description: `${l.price.toLocaleString("en-US")} Neo Coins`,
                 })),
               ),
           ),
@@ -272,7 +272,7 @@ function duel(p) {
     embeds: [
       embed(
         "Dice Duel",
-        `<@${p.challenger}> vs <@${p.opponent}>\nWager: **${p.wager.toLocaleString("en-US")} Dark Coins each**\n\nOne fair six-sided roll each. Winner gains the loser’s wager; ties move nothing. No coins deducted before both accept.\n\n${p.random ? `Accepted: ${p.accepted_a ? "✓" : "…"} challenger / ${p.accepted_b ? "✓" : "…"} opponent` : "The challenger has consented. Only the challenged player may accept or decline."}\nExpires <t:${Math.floor(p.expires / 1000)}:R>.`,
+        `<@${p.challenger}> vs <@${p.opponent}>\nWager: **${p.wager.toLocaleString("en-US")} Neo Coins each**\n\nOne fair six-sided roll each. Winner gains the loser’s wager; ties move nothing. No coins deducted before both accept.\n\n${p.random ? `Accepted: ${p.accepted_a ? "✓" : "…"} challenger / ${p.accepted_b ? "✓" : "…"} opponent` : "The challenger has consented. Only the challenged player may accept or decline."}\nExpires <t:${Math.floor(p.expires / 1000)}:R>.`,
       ),
     ],
     components: [
@@ -301,7 +301,7 @@ function help(p, ownerId) {
     content: "",
     embeds: [embed(p.title, p.description).setColor(0x5865f2)
       .addFields(p.fields)
-      .setFooter({ text: "Neox • [optional] arguments • Dark Coins have no real-world value" })],
+      .setFooter({ text: "Neox • [optional] arguments • Neo Coins have no real-world value" })],
     components: [new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder().setCustomId(`nh:${ownerId}`)
         .setPlaceholder("Choose a help category")
@@ -363,7 +363,7 @@ function commandCards(output) {
   if (part || !pages.length) pages.push(part || "Nothing here yet.");
   return pages.map((description, i) => ({
     content: "", embeds: [embed(title, description).setColor(color)
-      .setFooter({ text: `Neox • ${pages.length > 1 ? `Part ${i + 1}/${pages.length} • ` : ""}Dark Coins are virtual` })],
+      .setFooter({ text: `Neox • ${pages.length > 1 ? `Part ${i + 1}/${pages.length} • ` : ""}Neo Coins are virtual` })],
     allowedMentions,
   }));
 }
