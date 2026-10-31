@@ -271,7 +271,7 @@ function createClient(
         .sql("SELECT status FROM role_purchases WHERE id=?")
         .get(output.rolePurchase);
       await transport.extra({
-        content: `**Role purchase:** ${status || p?.status || "pending"}\nUse \`n rolepurchases\` to check its status or \`n refunds\` to check refunds.`,
+        content: status === "delivered" || p?.status === "delivered"\n          ? "**ROLE PURCHASE SUCCESSFUL!**\\nYour role has been added. Enjoy!" .replace("\\\\n", "\\n")\n          : status === "refunded" || p?.status === "refunded"\n            ? "**ROLE PURCHASE REFUNDED**\\nWe could not add the role. Your Dark Coins have been returned." .replace("\\\\n", "\\n")\n            : "**ROLE PURCHASE PENDING**\\nWe are still checking your role. Your coins are safe. Use `n rolepurchases` to check again." .replace("\\\\n", "\\n"),
         allowedMentions: UI.allowedMentions,
       });
     }

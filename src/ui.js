@@ -183,7 +183,7 @@ function panel(game, s) {
     } else if (v.stage === "detail" && v.role) {
       card = embed(
         admin ? "Manage Role Listing" : "Confirm Role Purchase",
-        `🏷️ **${markdownName(v.name || "Role")}**\nPrice: **${v.price.toLocaleString("en-US")} Dark Coins**\n\n${admin ? "Edit the price or remove this server’s listing." : "Payment is held in escrow until role delivery or a safe refund. Role purchases consume existing coins."}`,
+        `🏷️ **${markdownName(v.name || "Role")}**\nPrice: **${v.price.toLocaleString("en-US")} Dark Coins**\n\n${admin ? "Edit the price or remove this server’s listing." : "Your coins are only kept if the role is successfully added. Otherwise, you get a refund."}`,
       );
       components = [
         row(

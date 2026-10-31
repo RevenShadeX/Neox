@@ -250,7 +250,7 @@ class Sessions {
         const purchase = g.roleShop.reserve(ctx, v.role, v.price);
         this.save(s, true);
         return {
-          content: `Role purchase ${purchase} is processing. Payment is held safely until role delivery or refund.`,
+          content: "**ROLE PURCHASE**\nChecking your payment and adding your role. Please wait...",
           rolePurchase: purchase,
         };
       } else if (action === "enable" || action === "disable") {
