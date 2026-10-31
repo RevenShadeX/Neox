@@ -1,6 +1,7 @@
 "use strict";
 const {
   Client,
+  ActivityType,
   GatewayIntentBits,
   Options,
   PermissionFlagsBits,
@@ -108,6 +109,14 @@ function createClient(
   { animation = {}, profiles = {}, emojis = new EmojiResolver(), roles } = {},
 ) {
   const client = new Client({
+    presence: {
+      status: "online",
+      activities: [{
+        name: "You and me. test your luck",
+        type: ActivityType.Streaming,
+        url: "https://www.twitch.tv/revenshadex",
+      }],
+    },
     intents: [
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMessages,
