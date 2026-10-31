@@ -58,6 +58,19 @@ function guide(prefix, query) {
     const extra = Object.keys(commands).filter((name) => !grouped.has(name));
     if (!category && extra.length) fields.push({ name: "📋 More commands", value: extra.map((name) => `\`${name}\``).join(" · ") });
   }
+  const lessons = {
+    start: "**Start playing**\n1. Accept the rules with `n rules`.\n2. Claim `n daily` and `n weekly`.\n3. Use `n hunt` to earn coins and XP.",
+    hunting: "**How hunting works**\nUse `n hunt` to find monsters and gain XP. Wait 20 seconds between hunts. Use `n gems` and `n activate gem-id` for bonuses.",
+    gear: "**Get stronger**\nUse `n equipment` to check your stats. Get gear from the shop or boxes, then use `n equip gear-id`. Upgrade, enhance, repair, and infuse equipment to improve fights.",
+    combat: "**How to win battles**\nUse `n battle` to fight your current stage. Stronger weapons, armor, and companions help you win. Use `n equip gear-id`, `n pet monster-id`, and `n feed` to prepare. If you lose, upgrade your gear and retry. Use `n boss` for a boss fight.",
+    games: "**Games and duels**\nUse `n duel @user 100` to challenge someone or `n duel random 100` to find an opponent. Both players must accept. Each rolls a fair die; higher roll wins the wager, and a tie returns both bets. There is no guaranteed way to win. Coinflip, dice, and slots also use chance.",
+    progress: "**How to level up**\nEarn XP by hunting, fighting, and completing quests. Check `n level` to see your progress and `n quest` for tasks. Keep playing to reach the next level. Use `n levelrewards` if rewards are waiting.",
+    items: "**Boxes and items**\nUse `n inventory` and `n boxes` to see what you own. Open a box with `n open box-id` or up to 50 with `n open all`. Use `n boxinfo box-id` to see possible rewards.",
+    roles: "**Buying server roles**\nUse `n roleshop`, choose a role, and confirm. Neox adds the role or refunds your coins if it cannot. Use `n rolepurchases` to check the result.",
+    coins: "**Your Dark Coins**\nUse `n cash` to check your money. `n deposit 100` moves coins into your bank; `n withdraw 100` takes them out.",
+    trading: "**Trading equipment**\nUse `n trade @user gear-id price` to offer gear to another player. Check the offer before accepting.",
+  };
+  if (!key && query && lessons[query]) description = lessons[query] + "\n\n" + description;
   return {
     content: `${title}\n${description}\n${fields.map((field) => `${field.name}\n${field.value}`).join("\n\n")}`,
     presentation: { kind: "help", title, description, fields },

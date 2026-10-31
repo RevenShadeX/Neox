@@ -296,12 +296,21 @@ function queue(p) {
     allowedMentions,
   };
 }
-function help(p) {
+function help(p, ownerId) {
   return {
     content: "",
     embeds: [embed(p.title, p.description).setColor(0x5865f2)
       .addFields(p.fields)
       .setFooter({ text: "Neox • [optional] arguments • Dark Coins have no real-world value" })],
+    components: [new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder().setCustomId(`nh:${ownerId}`)
+        .setPlaceholder("Choose a help category")
+        .addOptions(require("./help").categories.map(([id, label]) => ({
+          label: label.replace(/^[^a-zA-Z]+/, "").slice(0, 100),
+          value: id,
+          description: "Learn how this part of Neox works",
+        })))
+    )],
     allowedMentions,
   };
 }

@@ -197,7 +197,7 @@ function createClient(
       return;
     }
     if (p?.kind === "help") {
-      await transport.show(UI.help(p));
+      await transport.show(UI.help(p, (source.user || source.author).id));
       return;
     }
     if (p?.kind === "panel") {
@@ -388,6 +388,15 @@ function createClient(
       return;
     }
     const id = i.customId || "";
+    if (id.startsWith("nh:")) {
+      if (!i.isStringSelectMenu?.()) throw new GameError("Invalid help menu.");
+      if (id.slice(3) !== ctx.userId) throw new GameError("Open your own help menu with n help.");
+      const topic = i.values?.[0];
+      if (!require("./help").categories.some(([name]) => name === topic))
+        throw new GameError("Unknown help category.");
+      await i.update(UI.help(require("./help").guide(game.getPrefix(ctx.guildId), topic).presentation, ctx.userId));
+      return;
+    }
     if (id.startsWith("neox:"))
       throw new GameError("This old panel expired. Open a new Neox command.");
     if (id.startsWith("nd:") || id.startsWith("nq:")) {
