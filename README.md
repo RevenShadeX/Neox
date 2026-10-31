@@ -233,10 +233,13 @@ Anyone can use `n help` or `/help` before accepting the game rules. The guide li
 
 - `n help games` lists coinflip, dice, slots and duels with descriptions.
 - `n help cf` shows syntax, aliases, permissions and a wager example; `n help coin flip` works too.
+- `n help battle`, `n help boss`, and `n help combat` explain fight preparation, cooldowns, stage progression, XP, cache drops, repairs, and automatic player battles.
+- `n help selling` compares monster release, sacrifice for Rift Essence, permanent gear disposal, and paid player trades. `n help sell` (or `n help sell all`) includes exact examples and immediate-removal notices. Selling pays no coins; bulk monster release keeps one of each species.
+- `n help sacrifice`, `n help infuse`, and `n help open` explain essence, armor upgrades, and safe cache opening. All walkthrough examples follow the current server prefix.
 - `n help roleshopadmin` explains role-shop management permissions.
 - `/help args:games` and `/help args:cf` show the same guides.
 
-Available categories: start, coins, hunting, items, gear, combat, games, progress, trading, roles, settings and legacy. Optional arguments use square brackets. Help is generated from the central command registry so command names, aliases and syntax remain consistent with the parser.
+Available categories: start, coins, hunting, items, selling, gear, combat, games, progress, trading, roles, settings and legacy. Optional arguments use square brackets. Help is generated from the central command registry so command names, aliases and syntax remain consistent with the parser.
 
 
 ### Pack artwork and cache reveals

@@ -71,7 +71,7 @@ const commands = {
   sellanimals: {
     aliases: ["release", "sellmonsters", "sm", "sa"],
     usage: "monster-id|all|rarity [quantity]",
-    description: "Sell monsters for Dark Coins; all or rarity preserves one of each",
+    description: "Release monsters without coin rewards; bulk keeps one of each",
   },
   huntstats: { description: "Hunting progression" },
   collection: {
@@ -106,7 +106,7 @@ const commands = {
     description: "Browse boxes, gems and equipment",
   },
   buy: { usage: "item-id [quantity]", description: "Purchase items" },
-  sell: { aliases: ["s"], usage: "gear-id|monster-id|all|rarity [quantity]", description: "Sell monsters or dispose of unequipped gear" },
+  sell: { aliases: ["s"], usage: "gear-id|monster-id|all|rarity [quantity]", description: "Release monsters or dispose of unequipped gear; no coin payout" },
   boxes: { description: "Box inventory" },
   open: {
     usage: "box-id|all [quantity|all]",
