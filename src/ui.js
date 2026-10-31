@@ -37,7 +37,7 @@ const button = (id, label, style = ButtonStyle.Secondary, disabled = false) => {
 const embed = (title, description) =>
   new EmbedBuilder()
     .setColor(RED)
-    .setTitle(`NEOX | ${title}`)
+    .setTitle(title)
     .setDescription(description)
     .setFooter({
       text: "Dark Coins are virtual • Never purchased or redeemed for money",
@@ -71,7 +71,7 @@ function panel(game, s) {
   } else if (s.kind === "coinflip") {
     card = embed(
       "🪙 Dark Coinflip",
-      "Choose a side, then enter your wager in the modal.\n\nHeads / tails: **50% each**. A win returns **2×** including stake; a loss returns **0**. Winnings are paid directly by Neox; no treasury funding is required.",
+      "Pick Heads or Tails, then enter how many coins to bet.\n\nEach side has a **50% chance**. Win: get **2× your bet** back. Lose: lose your bet.",
     );
     components = [
       row(
@@ -133,11 +133,11 @@ function panel(game, s) {
           : selected.bonus
             ? `\nBonus tier ${selected.tier} • ${selected.uses} hunts / ${selected.duration / 3600000} hours`
             : C.boxes.includes(selected)
-              ? "\nItems only. Use boxinfo for complete drop probabilities."
-              : "\nCompanion training supplies.";
+              ? "\nContains random items. Use `n boxinfo` to see possible rewards."
+              : "\nFood and supplies for your companion.";
       card = embed(
         v.stage === "confirm" ? "Confirm Purchase" : "Item Information",
-        `${itemIcon(selected)} **${markdownName(selected.name || selected.id)}**\nUnit price: **${v.price.toLocaleString("en-US")} Dark Coins**${details}${v.stage === "confirm" ? `\n\nQuantity: ${v.quantity}\nTotal: **${(v.price * v.quantity).toLocaleString("en-US")} Dark Coins**` : "\n\nChoose a quantity before confirming."}`,
+        `${itemIcon(selected)} **${markdownName(selected.name || selected.id)}**\nUnit price: **${v.price.toLocaleString("en-US")} Dark Coins**${details}${v.stage === "confirm" ? `\n\nQuantity: ${v.quantity}\nTotal: **${(v.price * v.quantity).toLocaleString("en-US")} Dark Coins**` : "\n\nChoose how many you want to buy."}`,
       );
       components = [
         category,

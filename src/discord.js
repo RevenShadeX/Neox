@@ -108,7 +108,7 @@ function createClient(
   const errorText = (err) =>
     err instanceof GameError
       ? `⚠️ ${err.message}`
-      : "⚠️ Neox could not complete this action. Check history before retrying; no partial database transaction is committed.";
+      : "⚠️ Something went wrong. Please try again. If it keeps happening, contact a server admin.";
   const logError = (label, error) =>
     console.warn(label, error.code || error.name || "Error");
   const context = (s, interaction = false) => ({
@@ -229,7 +229,7 @@ function createClient(
         await transport.show(payload);
       } catch {
         await transport.fallback({
-          content: "⚠️ Could not send your card. Check image attachment permissions and try again.",
+          content: "⚠️ Could not show your profile card. Check that Neox can attach images, then try again.",
           embeds: [],
           components: [],
           files: [],
@@ -271,7 +271,7 @@ function createClient(
         .sql("SELECT status FROM role_purchases WHERE id=?")
         .get(output.rolePurchase);
       await transport.extra({
-        content: `Role purchase ${output.rolePurchase}: ${status || p?.status || "pending"}. Uncertain API requests are recovered automatically. Use rolepurchases for status, refunds for held refunds.`,
+        content: `**Role purchase:** ${status || p?.status || "pending"}\nUse \`n rolepurchases\` to check its status or \`n refunds\` to check refunds.`,
         allowedMentions: UI.allowedMentions,
       });
     }
