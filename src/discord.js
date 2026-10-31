@@ -249,7 +249,15 @@ function createClient(
     } else if (p?.kind === "card") {
       const cards = UI.commandCards(output);
       if (p.combat) {
-        try { cards[0].files = [battleImage(p)]; }
+        try {
+          const combat = p.combat;
+          const getAvatar = async (id) => {
+            if (!id) return null;
+            const user = await client.users.fetch(id).catch(() => null);
+            return user?.displayAvatarURL({ extension: "png", size: 128 }) || null;
+          };
+          cards[0].files = [await battleImage(p, await getAvatar(combat.userId), await getAvatar(combat.enemyId))];
+        }
         catch (e) { logError("Battle artwork unavailable:", e); }
       }
       await transport.show(cards[0]);

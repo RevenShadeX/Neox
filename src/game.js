@@ -653,7 +653,7 @@ class Game {
           : [{ item: find(C.animals, a[0]).id, qty: this.qty(id, "animal", a[0]) }];
         let count = 0, earned = 0;
         for (const row of rows) {
-          const quantity = bulk ? Math.max(0, row.qty - 1) : a[1] ? n(a[1], 1, 1000000) : 1;
+          const quantity = bulk ? row.qty : a[1] ? n(a[1], 1, 1000000) : 1;
           if (!quantity) continue;
           const animal = find(C.animals, row.item);
           assert(quantity <= row.qty, "Not enough monsters.");
@@ -665,7 +665,7 @@ class Game {
         }
         assert(count > 0, "No monsters available to sell.");
         this.money(id, earned, "monster sales");
-        return `**NEOX • MONSTERS SOLD**\nSold: **${fmt(count)} monsters**\nEarned: **${fmt(earned)} Dark Coins**\n\nSelling all keeps one of each species. Sacrifice duplicates instead to earn Rift Essence.`;
+        return `**NEOX • MONSTERS SOLD**\nSold: **${fmt(count)} monsters**\nEarned: **${fmt(earned)} Dark Coins**\n\nSelling all sells every matching monster. Use n sacrifice all to keep one of each and turn duplicates into Rift Essence.`;
       }
       case "huntstats":
         return `Level ${level(p)} • ${fmt(p.xp)} hunting XP\n${fmt(p.hunts)} hunts • streak ${p.streak}/50\n${this.sql("SELECT COUNT(*) AS n FROM discoveries WHERE user=?").get(id).n}/200 species discovered\nNext level: ${fmt(level(p) ** 2 * 100)} XP`;
@@ -1121,7 +1121,7 @@ class Game {
           content: `${enemy ? `Ranked spar against <@${enemyId}>` : boss ? "Boss battle against the Sovereign of the Rift" : `Expedition Stage ${stage} against ${elite ? "the Eternal Rift Sovereign" : stageBoss ? "a Rift Overlord" : "a Rift Sentinel"}`}\n${log.join("\n")}\n${draw ? "Draw" : won ? "Victory" : "Defeat"} • +0 Dark Coins • ${won ? 35 : 15} hunting XP\nRanked sparring uses saved equipment; no opponent coins are taken.\nEquipped gear loses 1–4% condition per fight. Repair with n repair all.${battleLoot}`,
           presentation: {
             kind: "card", command: name,
-            combat: { won, draw, hp: Math.max(0, hp), enemyHP: Math.max(0, ehp),
+            combat: { won, draw, hp: Math.max(0, hp), enemyHP: Math.max(0, ehp), userId: id, enemyId, playerLevel: level(p), opponentLevel: enemy ? level(enemy) : null, playerAttack: me.attack, opponentAttack: foe.attack, playerDefense: me.defense, opponentDefense: foe.defense,
               enemy: enemy ? `<@${enemyId}>` : boss ? "Sovereign of the Rift" : elite ? "Eternal Rift Sovereign" : stageBoss ? "Rift Overlord" : "Rift Sentinel",
               stage, stageBoss, elite, enemyMaxHP, nextStage: stage === null ? null : stage + (won && !draw && stage < 1000000000 ? 1 : 0),
               log, xp: won ? 35 : 15 },

@@ -1,5 +1,5 @@
 "use strict";
-const { createCanvas } = require("@napi-rs/canvas");
+const { createCanvas, loadImage } = require("@napi-rs/canvas");
 const { AttachmentBuilder } = require("discord.js");
 const COLORS = { Legendary: "#f7b74d", Mythic: "#e66cff", Divine: "#80dbff", Secret: "#ff4d79" };
 function round(ctx,x,y,w,h,r,fill,stroke) {
@@ -43,16 +43,30 @@ function lootImage(item){
   text(c,"✦  A RARE TREASURE HAS BEEN FOUND",55,451,17,color,700);
   return new AttachmentBuilder(canvas.toBuffer("image/png"),{name:"neox-rare-drop.png"});
 }
-function battleImage(p){
+async function battleImage(p, playerAvatar, opponentAvatar){
   const b=p.combat,canvas=createCanvas(900,490),c=canvas.getContext("2d");
   const accent=b.won?"#41d5ac":b.draw?"#f9c55e":"#fb557e";base(c,900,490,accent);
   text(c,"NEOX  /  RIFT COMBAT",55,77,22,"#aab4d7",700);
   text(c,b.won?"VICTORY":b.draw?"DRAW":"DEFEAT",55,140,49,accent,900);
   text(c,(b.stage!=null?"STAGE "+b.stage+"  •  ":"")+(b.elite?"ELITE BOSS":b.stageBoss?"BOSS ENCOUNTER":"BATTLE"),55,186,22,"#c3c9e0",700);
-  text(c,"YOU",55,251,23,"#ffffff",800);text(c,"OPPONENT",490,251,23,"#ffffff",800);
+  const avatar = async (url,x,y,label) => {
+    round(c,x,y,86,86,18,"#232a45");
+    if (url) {
+      try {
+        const img = await loadImage(url);
+        c.save();c.beginPath();c.roundRect(x,y,86,86,18);c.clip();c.drawImage(img,x,y,86,86);c.restore();
+      } catch (_) { text(c,label[0],x+28,y+56,38); }
+    } else text(c,label[0],x+28,y+56,38);
+  };
+  await avatar(playerAvatar,55,205,"YOU");
+  await avatar(opponentAvatar,490,205,"FOE");
+  text(c,"YOU  LV."+ (b.playerLevel||"?"),151,247,22,"#ffffff",800);
+  text(c,(b.enemyId?"RIVAL":"ENEMY")+"  LV."+(b.opponentLevel||"?"),585,247,21,"#ffffff",800);
   bar(c,55,273,350,28,b.hp/100,"#3da8ff");bar(c,490,273,350,28,b.enemyHP/(b.enemyMaxHP||100),"#f4497e");
   text(c,b.hp+" / 100 HP",55,339,23,"#dce8ff");text(c,Math.max(0,b.enemyHP)+" / "+(b.enemyMaxHP||100)+" HP",490,339,23,"#ffe0e7");
   text(c,String(b.enemy).slice(0,38),490,382,21,"#bfc7e2");
+  text(c,"ATK "+(b.playerAttack||0)+"  DEF "+(b.playerDefense||0),55,382,19,"#bfc7e2");
+  text(c,"ATK "+(b.opponentAttack||0)+"  DEF "+(b.opponentDefense||0),490,405,18,"#bfc7e2");
   round(c,50,404,800,54,12,"#191e38");
   text(c,b.stage!=null?(b.won?"STAGE CLEARED  →  NEXT STAGE "+b.nextStage:"STAGE "+b.stage+"  •  RETRY TO PROGRESS"):"XP EARNED  +"+b.xp,73,439,22,accent,800);
   return new AttachmentBuilder(canvas.toBuffer("image/png"),{name:"neox-battle.png"});

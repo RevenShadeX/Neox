@@ -95,7 +95,7 @@ const commands = {
   },
   enhance: { usage: "gear-id", description: "Enhance equipment with gems" },
   equipment: { aliases: ["eq"], description: "Equipped stats" },
-  weapons: { aliases: ["wp", "weps"], description: "See all weapons and which ones you own" },
+  weapons: { aliases: ["wp", "weps", "weapon", "w", "wc"], description: "See all weapons and which ones you own" },
   equip: { usage: "gear-id", description: "Equip owned gear" },
   unequip: { usage: "weapon|armor|accessory", description: "Remove equipment" },
   compare: { usage: "gear-id gear-id", description: "Compare two owned items" },
