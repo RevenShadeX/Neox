@@ -62,7 +62,21 @@ function lineIcon(line, resolver) {
   const monster = Object.entries(monsterNames).find(([name]) => line.includes(name));
   if (monster) return named(resolver,monster[1]);
   const gear = line.match(/(?:#\d+\s+|\b)(?:Ash|Copper|Veil|Astral|Crown|Rift)\s+(sword|bow|dagger|spear|staff|armor|accessory)\b/i);
-  if (gear) return named(resolver,gearNames[gear[1].toLowerCase()]);
+  if (gear) {
+    const type = gear[1].toLowerCase();
+    const rarity = (line.match(/\\[(Common|Uncommon|Rare|Epic|Legendary|Mythic)\\]/i) || [])[1] || "";
+    const variants = {
+      sword: ["neox_sword","neox_greatsword","neox_katana","neox_fireblade","neox_holyblade","neox_darkblade"],
+      bow: ["neox_bow","neox_bow","neox_bow","neox_bow","neox_bow","neox_bow"],
+      dagger: ["neox_dagger","neox_claw","neox_dagger","neox_claw","neox_dagger","neox_claw"],
+      spear: ["neox_spear","neox_spear","neox_spear","neox_spear","neox_spear","neox_spear"],
+      staff: ["neox_staff","neox_wand","neox_staff","neox_wand","neox_staff","neox_wand"],
+      armor: ["neox_armor_light","neox_armor_shadow","neox_heavy","neox_mystic","neox_armor_dragon","neox_armor_void"],
+    };
+    const tiers = ["Common","Uncommon","Rare","Epic","Legendary","Mythic"];
+    const selected = variants[type]?.[tiers.findIndex(r => r.toLowerCase() === rarity.toLowerCase())] || gearNames[type];
+    return named(resolver,selected) || named(resolver,gearNames[type]);
+  }
   const gem = line.match(/\b(lucky|hunting|xp|currency|event)(?:[123]|\s+gem)\b/i);
   if (gem) return named(resolver,gemNames[gem[1].toLowerCase()]);
   const box = line.match(/\b(beginner|daily|weapon|armor|animal|gem|legendary|event)\s+cache\b/i);

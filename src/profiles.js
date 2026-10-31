@@ -32,11 +32,11 @@ class BoundedCache {
   }
 }
 function background() {
-  const canvas = createCanvas(900, 300),
+  const canvas = createCanvas(900, 360),
     c = canvas.getContext("2d");
   c.fillStyle = "#0b0b0f";
-  c.fillRect(0, 0, 900, 300);
-  const g = c.createLinearGradient(0, 0, 900, 300);
+  c.fillRect(0, 0, 900, 360);
+  const g = c.createLinearGradient(0, 0, 900, 360);
   g.addColorStop(0, "#240c12");
   g.addColorStop(0.5, "#111014");
   g.addColorStop(1, "#1a0b10");
@@ -52,7 +52,7 @@ function background() {
   }
   c.fillStyle = "#b91c32";
   c.fillRect(0, 0, 900, 4);
-  c.fillRect(0, 296, 900, 4);
+  c.fillRect(0, 356, 900, 4);
   c.fillStyle = "#e04455";
   c.font = "bold 16px NeoxSans";
   c.fillText("N E O X  /  PROFILE", 30, 35);
@@ -147,9 +147,12 @@ class ProfileRenderer {
     let canvas;
     try {
       const avatar = await this.avatar(identity.avatarURL);
-      canvas = createCanvas(900, 300);
+      canvas = createCanvas(900, 360);
       const c = canvas.getContext("2d");
       c.drawImage(sharedBackground, 0, 0);
+      const glow = c.createRadialGradient(108, 157, 10, 108, 157, 160);
+      glow.addColorStop(0, "rgba(224,68,85,.20)"); glow.addColorStop(1, "rgba(224,68,85,0)");
+      c.fillStyle = glow; c.fillRect(0, 0, 300, 320);
       const name = cleanName(identity.displayName || profile.displayName);
       c.save();
       c.beginPath();
@@ -181,7 +184,7 @@ class ProfileRenderer {
         label = label.slice(0, -2) + "…";
       c.fillStyle = "#fff1f2";
       c.fillText(label, 215, 78);
-      text(`LEVEL ${profile.level}`, 740, 35, 18, "#f2a4ae");
+      text(`LEVEL ${profile.level}`, 730, 35, 20, "#f2a4ae");
       text(
         `${profile.current.toLocaleString("en-US")} / ${profile.required.toLocaleString("en-US")} XP`,
         215,
@@ -241,11 +244,16 @@ class ProfileRenderer {
         14,
         "#b9a9ad",
       );
+      c.fillStyle = "#1d151d"; c.beginPath(); c.roundRect(215, 283, 645, 51, 12); c.fill();
+      c.strokeStyle = "#69303c"; c.lineWidth = 1; c.stroke();
+      text("NEXT LEVEL", 233, 302, 12, "#a5a1b1");
+      text(profile.capped ? "MAX LEVEL" : (Math.max(0, profile.required - profile.current).toLocaleString("en-US") + " XP TO GO"), 233, 322, 18, "#fff1f2");
+      text("RANK  #" + profile.rank.toLocaleString("en-US"), 696, 315, 18, "#f2a4ae");
       if (profile.pendingRewards)
         text(
           `Pending level rewards: ${profile.pendingRewards.toLocaleString("en-US")} Dark Coins`,
           215,
-          285,
+          348,
           11,
           "#e47786",
         );
