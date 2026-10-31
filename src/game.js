@@ -1057,25 +1057,39 @@ class Game {
           ehp = boss ? 160 : stage !== null ? 100 + Math.floor(scale * 8) + (stageBoss ? 80 : 0) + (elite ? 120 : 0) : 100;
         const enemyMaxHP = ehp;
         const log = [];
+        const rounds = [];
+        const totals = { dealt: 0, taken: 0, blocked: 0, crits: 0, healed: 0 };
         const strike = (att, def) => {
-          let damage = Math.max(
-            2,
-            att.attack - Math.floor(def.defense * 0.6) + this.rng.int(-3, 5),
-          );
-          if (att.abilities.includes("critical") && this.rng.int(1, 100) <= 20)
-            damage *= 2;
+          const raw = Math.max(2, att.attack + this.rng.int(-3, 5));
+          const blocked = Math.floor(def.defense * 0.6);
+          let damage = Math.max(2, raw - blocked);
+          const critical = att.abilities.includes("critical") && this.rng.int(1, 100) <= 20;
+          if (critical) damage *= 2;
           if (att.abilities.includes("force")) damage += 3;
           if (def.abilities.includes("guard")) damage = Math.max(1, damage - 3);
-          return Math.min(80, damage);
+          return { damage: Math.min(80, damage), critical, blocked: Math.max(0, blocked + (def.abilities.includes("guard") ? 3 : 0)) };
         };
         for (let turn = 1; turn <= 15 && hp > 0 && ehp > 0; turn++) {
-          const d = strike(me, foe);
-          ehp -= d;
-          if (me.abilities.includes("siphon")) hp = Math.min(100, hp + 3);
-          if (ehp > 0) {
-            hp -= strike(foe, me);
-            if (foe.abilities.includes("siphon")) ehp = Math.min(100, ehp + 3);
+          const hit = strike(me, foe);
+          ehp -= hit.damage;
+          totals.dealt += hit.damage;
+          if (hit.critical) totals.crits++;
+          let healed = 0, received = 0, blocked = 0;
+          if (me.abilities.includes("siphon")) {
+            healed = Math.min(3, 100 - hp);
+            hp += healed;
+            totals.healed += healed;
           }
+          if (ehp > 0) {
+            const counter = strike(foe, me);
+            received = counter.damage;
+            blocked = counter.blocked;
+            hp -= received;
+            totals.taken += received;
+            totals.blocked += blocked;
+            if (foe.abilities.includes("siphon")) ehp = Math.min(enemyMaxHP, ehp + 3);
+          }
+          rounds.push({ turn, dealt: hit.damage, received, blocked, critical: hit.critical, healed, hp: Math.max(0, hp), enemyHP: Math.max(0, ehp) });
           log.push(`${turn}: ${Math.max(0, hp)} / ${Math.max(0, ehp)} HP`);
         }
         const won = hp > 0 && (ehp <= 0 || hp > ehp),
@@ -1125,7 +1139,7 @@ class Game {
             combat: { won, draw, weaponCache: !!battleLoot, hp: Math.max(0, hp), enemyHP: Math.max(0, ehp), userId: id, enemyId, playerLevel: level(p), opponentLevel: enemy ? level(enemy) : null, playerAttack: me.attack, opponentAttack: foe.attack, playerDefense: me.defense, opponentDefense: foe.defense,
               enemy: enemy ? `<@${enemyId}>` : boss ? "Sovereign of the Rift" : elite ? "Eternal Rift Sovereign" : stageBoss ? "Rift Overlord" : "Rift Sentinel",
               stage, stageBoss, elite, enemyMaxHP, nextStage: stage === null ? null : stage + (won && !draw && stage < 1000000000 ? 1 : 0),
-              log, xp: won ? 35 : 15 },
+              log, rounds, totals, xp: won ? 35 : 15 },
           },
         };
       }

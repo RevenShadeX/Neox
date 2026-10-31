@@ -44,36 +44,43 @@ function lootImage(item){
   return new AttachmentBuilder(canvas.toBuffer("image/png"),{name:"neox-rare-drop.png"});
 }
 async function battleImage(p, playerAvatar, opponentAvatar){
-  const b=p.combat,canvas=createCanvas(900,490),c=canvas.getContext("2d");
-  const accent=b.won?"#41d5ac":b.draw?"#f9c55e":"#fb557e";base(c,900,490,accent);
-  text(c,"NEOX  /  RIFT COMBAT",55,77,22,"#aab4d7",700);
-  text(c,b.won?"VICTORY":b.draw?"DRAW":"DEFEAT",55,140,49,accent,900);
-  text(c,(b.stage!=null?"STAGE "+b.stage+"  •  ":"")+(b.elite?"ELITE BOSS":b.stageBoss?"BOSS ENCOUNTER":"BATTLE"),55,186,22,"#c3c9e0",700);
-  const avatar = async (url,x,y,label) => {
-    round(c,x,y,86,86,18,"#232a45");
-    if (url) {
-      try {
-        const img = await loadImage(url);
-        c.save();c.beginPath();c.roundRect(x,y,86,86,18);c.clip();c.drawImage(img,x,y,86,86);c.restore();
-      } catch (_) { text(c,label[0],x+28,y+56,38); }
-    } else text(c,label[0],x+28,y+56,38);
+  const b=p.combat, canvas=createCanvas(1100,650), c=canvas.getContext("2d");
+  const accent=b.won?"#35d6ad":b.draw?"#ffc966":"#ff5379";
+  base(c,1100,650,accent);
+  round(c,42,42,1016,90,18,"#111a30");
+  text(c,"NEOX  /  RIFT ARENA",68,77,20,"#98a9c8",800);
+  text(c,b.won?"VICTORY":b.draw?"DRAW":"DEFEAT",68,119,43,accent,900);
+  const encounter=b.stage!=null?"STAGE "+b.stage+(b.elite?"  /  ELITE":b.stageBoss?"  /  BOSS":"  /  EXPEDITION"):"RANKED COMBAT";
+  text(c,encounter,755,94,22,"#c3cbe3",700);
+  const avatar=async(url,x,y,label)=>{
+    round(c,x,y,105,105,20,"#293149");
+    if(url){try{const img=await loadImage(url);c.save();c.beginPath();c.roundRect(x,y,105,105,20);c.clip();c.drawImage(img,x,y,105,105);c.restore();return;}catch(_){}}
+    text(c,label,x+28,y+69,42,"#dce6ff",800);
   };
-  await avatar(playerAvatar,55,205,"YOU");
-  await avatar(opponentAvatar,490,205,"FOE");
-  text(c,"YOU  LV."+ (b.playerLevel||"?"),151,247,22,"#ffffff",800);
-  text(c,(b.enemyId?"RIVAL":"ENEMY")+"  LV."+(b.opponentLevel||"?"),585,247,21,"#ffffff",800);
-  bar(c,55,273,350,28,b.hp/100,"#3da8ff");bar(c,490,273,350,28,b.enemyHP/(b.enemyMaxHP||100),"#f4497e");
-  text(c,b.hp+" / 100 HP",55,339,23,"#dce8ff");text(c,Math.max(0,b.enemyHP)+" / "+(b.enemyMaxHP||100)+" HP",490,339,23,"#ffe0e7");
-  text(c,String(b.enemy).slice(0,38),490,382,21,"#bfc7e2");
-  text(c,"ATK "+(b.playerAttack||0)+"  DEF "+(b.playerDefense||0),55,382,19,"#bfc7e2");
-  text(c,"ATK "+(b.opponentAttack||0)+"  DEF "+(b.opponentDefense||0),490,395,18,"#bfc7e2");
-  round(c,50,413,800,54,12,"#191e38");
-  const rewardText = b.weaponCache
-    ? "WEAPON CACHE WON!  Open with: n open weapon"
-    : b.stage!=null
-      ? (b.won ? "STAGE CLEARED  •  NEXT STAGE "+b.nextStage : "STAGE "+b.stage+"  •  RETRY TO PROGRESS")
-      : "XP EARNED  +"+b.xp;
-  text(c,rewardText,73,448,b.weaponCache?23:21,b.weaponCache?"#f7b74d":accent,800);
+  await avatar(playerAvatar,68,167,"P");
+  await avatar(opponentAvatar,602,167,"E");
+  text(c,"PLAYER  /  LV "+(b.playerLevel||"?"),190,210,23,"#ffffff",800);
+  text(c,b.enemyId?"RIVAL  /  LV "+(b.opponentLevel||"?"):"RIFT ENEMY",726,210,23,"#ffffff",800);
+  bar(c,68,293,430,27,Math.max(0,b.hp)/100,"#46b9f9");
+  bar(c,602,293,430,27,Math.max(0,b.enemyHP)/(b.enemyMaxHP||100),"#fb5e86");
+  text(c,Math.max(0,b.hp)+" / 100 HP",68,357,22,"#e1eaff");
+  text(c,Math.max(0,b.enemyHP)+" / "+(b.enemyMaxHP||100)+" HP",602,357,22,"#ffe0e9");
+  text(c,"ATK "+(b.playerAttack||0)+"   DEF "+(b.playerDefense||0),68,396,20,"#b9c9e5");
+  text(c,"ATK "+(b.opponentAttack||0)+"   DEF "+(b.opponentDefense||0),602,396,20,"#b9c9e5");
+  round(c,58,419,984,117,18,"#151e35");
+  const t=b.totals||{};
+  text(c,"DAMAGE DEALT",85,453,17,"#8d9cba",700);
+  text(c,String(t.dealt||0),85,506,39,"#eaf3ff",900);
+  text(c,"DAMAGE TAKEN",315,453,17,"#8d9cba",700);
+  text(c,String(t.taken||0),315,506,39,"#ff8da7",900);
+  text(c,"DAMAGE BLOCKED",550,453,17,"#8d9cba",700);
+  text(c,String(t.blocked||0),550,506,39,"#7cc8ff",900);
+  text(c,"CRITICAL HITS",800,453,17,"#8d9cba",700);
+  text(c,String(t.crits||0),800,506,39,"#ffd36d",900);
+  round(c,58,551,984,58,13,"#20243d");
+  const reward=b.weaponCache?"WEAPON CACHE WON  /  n open weapon":b.stage!=null?(b.won?"STAGE CLEARED  /  NEXT "+b.nextStage:"STAGE "+b.stage+"  /  RETRY"):"BATTLE COMPLETE";
+  text(c,reward,82,588,23,b.weaponCache?"#ffd36d":accent,800);
+  text(c,"+"+b.xp+" XP",901,588,21,"#d9e5ff",800);
   return new AttachmentBuilder(canvas.toBuffer("image/png"),{name:"neox-battle.png"});
 }
 module.exports={lootImage,battleImage};

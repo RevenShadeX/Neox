@@ -337,6 +337,10 @@ function commandCards(output) {
         { name: "❤️ Your health", value: `${c.hp} / 100 HP`, inline: true },
         { name: "🛡️ Opponent health", value: `${c.enemyHP} / ${c.enemyMaxHP || (p.command === "boss" ? 160 : 100)} HP`, inline: true },
         { name: "✨ Progress", value: `+${c.xp} hunting XP`, inline: true },
+        { name: "⚔️ Damage dealt", value: String(c.totals?.dealt ?? 0), inline: true },
+        { name: "🛡️ Damage blocked", value: String(c.totals?.blocked ?? 0), inline: true },
+        { name: "💥 Critical hits", value: String(c.totals?.crits ?? 0), inline: true },
+        { name: "📜 Combat highlights", value: (c.rounds || []).slice(-5).map(r => `R${r.turn} • ⚔️ ${r.dealt}${r.critical ? " CRIT!" : ""} • 💔 ${r.received} taken${r.healed ? ` • 💚 +${r.healed} HP` : ""}`).join("\n") || "No rounds recorded." },
         { name: "📜 Battle rounds · You / Opponent", value: `\`\`\`\n${c.log.join("\n")}\n\`\`\`` },
       ).setFooter({ text: "Neox • Saved equipment combat • No opponent coins taken" });
     return [{ content: "", embeds: [card], allowedMentions }];
