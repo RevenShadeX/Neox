@@ -15,8 +15,9 @@ const { presentCoinflip, levelUpPayload } = require("./presentation");
 const { presentSlots } = require("./slots-presentation");
 const { EmojiResolver } = require("./emojis");
 const { decoratePayload } = require("./emoji-decorate");
-const { itemEmojiName, itemAttachment } = require("./pack-art");
+const { itemAttachment } = require("./pack-art");
 const { lootImage, battleImage } = require("./visual-cards");
+const { collectionCards, collectionPage } = require("./collection-ui");
 const { payloadPages } = require("./payload-safety");
 const { presentLoot } = require("./loot-presentation");
 const { ProfileService } = require("./profile-service");
@@ -62,31 +63,6 @@ function chunks(text, limit = 1900) {
   }
   if (current) out.push(current);
   return out;
-}
-function collectionCards(p, emojis) {
-  const isArmor = p.command === "armors";
-  const title = isArmor ? "🛡️ ARMOR VAULT" : "🗡️ WEAPON ARSENAL";
-  const types = isArmor ? ["armor"] : ["sword", "bow", "dagger", "spear", "staff"];
-  const cards = [];
-  for (const type of types) {
-    const entries = (p.items || []).filter(item => item.type === type);
-    const lines = entries.map(item => {
-      const emoji = emojis?.named?.(itemEmojiName(item)) || emojis?.named?.(itemEmojiName({ type })) || (isArmor ? "🛡️" : "🗡️");
-      const owned = item.state.startsWith("OWNED");
-      return `${emoji} **${item.name}** · ${item.rarity}\n   ${owned ? "✅ " + item.state : "▫️ Not collected"}`;
-    });
-    cards.push({
-      content: "",
-      embeds: [{
-        color: 0x9b3147,
-        title: `${title}  /  ${type.toUpperCase()}`,
-        description: lines.join("\n\n") || "No items available.",
-        footer: { text: "NEOX • Use n equip <gear-id> to equip owned gear" },
-      }],
-      allowedMentions: { parse: [] },
-    });
-  }
-  return cards;
 }
 function dailyCard(p) {
   const weekly = p.claimType === "weekly";
@@ -343,9 +319,10 @@ function createClient(
     } else if (p?.kind === "claim" || p?.kind === "daily") {
       await transport.show(dailyCard(p));
     } else if (p?.kind === "collection") {
-      const cards = collectionCards(p, emojis);
-      await transport.show(cards[0]);
-      for (const card of cards.slice(1)) await transport.extra(card);
+      await transport.show(collectionPage(p, emojis, {
+        owner: (source.user || source.author).id, guild: source.guildId,
+        expires: Math.floor(Date.now() / 1000) + 600, prefix: game.getPrefix(source.guildId),
+      }));
     } else if (p?.kind === "loot") {
       await presentLoot(p, transport, { ...animation, cards: lootCards, render: lootImage, emojis, logError });
     } else if (p?.kind === "card") {
@@ -503,6 +480,25 @@ function createClient(
       return;
     }
     const id = i.customId || "";
+    if (id.startsWith("nc:")) {
+      const match = /^nc:(\d{5,22}):(\d{5,22}):(weapons|armors):(\d{1,4}):(\d{10})$/.exec(id);
+      if (!i.isButton?.() || !match) throw new GameError("Invalid collection control. Open weapons or armors again.");
+      if (match[1] !== ctx.userId || match[2] !== ctx.guildId)
+        throw new GameError("This collection belongs to another player or server. Open your own collection.");
+      if (Number(match[5]) <= Math.floor(Date.now() / 1000))
+        throw new GameError("This collection menu expired. Open weapons or armors again.");
+      game.requireAgreement(ctx.userId);
+      const output = game.equipmentCollection(ctx.userId, match[3]);
+      const payload = collectionPage(output.presentation, emojis, {
+        owner: ctx.userId, guild: ctx.guildId, page: Number(match[4]), expires: Number(match[5]), prefix: game.getPrefix(ctx.guildId),
+      });
+      // Refresh read-only inventory pages by editing the same message. No command,
+      // reward, cooldown or XP transaction runs when a navigation button is pressed.
+      const pages = payloadPages(decoratePayload(payload, emojis));
+      if (pages.length !== 1) throw new GameError("Collection page is too large. Open a fresh collection.");
+      await i.update(pages[0]);
+      return;
+    }
     if (id.startsWith("nh:")) {
       if (!i.isStringSelectMenu?.()) throw new GameError("Invalid help menu.");
       if (id.slice(3) !== ctx.userId) throw new GameError("Open your own help menu with n help.");

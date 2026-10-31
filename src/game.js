@@ -234,6 +234,18 @@ class Game {
     return this.sql("INSERT INTO gear(user,item) VALUES(?,?)").run(id, item)
       .lastInsertRowid;
   }
+  equipmentCollection(id, name) {
+    const owned = this.sql("SELECT id,item,slot,level,enhance FROM gear WHERE user=? ORDER BY id").all(id);
+    const weapons = C.equipment.filter((item) => item.slot === (name === "armors" ? "armor" : "weapon"));
+    const lines = weapons.map((item) => {
+      const copies = owned.filter((gear) => gear.item === item.id);
+      const state = copies.length
+        ? "OWNED x" + copies.length + " • " + copies.map((gear) => "#" + gear.id + " L" + gear.level + " +" + gear.enhance + (gear.slot ? " equipped" : "")).join(", ")
+        : "NOT OWNED";
+      return item.name + " [" + item.rarity + "] • " + state;
+    });
+    return { content: lines.join("\n"), presentation: { kind: "collection", command: name, items: weapons.map((item, i) => ({ name: item.name, rarity: item.rarity, type: item.type, state: lines[i].split(" • ").slice(1).join(" • ") })) } };
+  }
   stats(id) {
     const rows = this.sql(
       "SELECT * FROM gear WHERE user=? AND slot IS NOT NULL",
@@ -791,16 +803,7 @@ class Game {
       }
       case "armors":
       case "weapons": {
-        const owned = this.sql("SELECT id,item,slot,level,enhance FROM gear WHERE user=? ORDER BY id").all(id);
-        const weapons = C.equipment.filter((item) => item.slot === (name === "armors" ? "armor" : "weapon"));
-        const lines = weapons.map((item) => {
-          const copies = owned.filter((gear) => gear.item === item.id);
-          const state = copies.length
-            ? "OWNED x" + copies.length + " • " + copies.map((gear) => "#" + gear.id + " L" + gear.level + " +" + gear.enhance + (gear.slot ? " equipped" : "")).join(", ")
-            : "NOT OWNED";
-          return item.name + " [" + item.rarity + "] • " + state;
-        });
-        return { content: lines.join("\n"), presentation: { kind: "collection", command: name, items: weapons.map((item, i) => ({ name: item.name, rarity: item.rarity, type: item.type, state: lines[i].split(" • ").slice(1).join(" • ") })) } };
+        return this.equipmentCollection(id, name);
       }
       case "equipment": {
         const s = this.stats(id);

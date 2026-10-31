@@ -92,8 +92,8 @@ function guide(prefix, query) {
     trade: "Offer an owned, unequipped gear item with `n trade @user 42 100`. The buyer must already play Neox. This creates a 10-minute offer; no coins move until acceptance.\nThe buyer uses `n trades`, then `n accept offer-id`. The seller can use `n cancel offer-id`. Replace 42 with a gear ID and offer-id with the trade number, not the gear number. Unlike `n sell 42`, an accepted trade transfers the buyer's existing coins to you.",
   };
   const gearGuides = {
-    weapons: "🗡️ Lists weapon types and shows OWNED / NOT OWNED. Use the #gear ID to equip or upgrade a weapon.",
-    armors: "🛡️ Lists armor types and shows OWNED / NOT OWNED. Armor reduces incoming battle damage.",
+    weapons: "🗡️ Browse weapon types in one message with Previous / Next buttons. Shows owned / missing, equipped status, upgrade level and enhancement. Use the #gear ID to equip or upgrade a weapon.",
+    armors: "🛡️ Browse armor in one message with Previous / Next buttons when needed. Shows owned / missing and equipment levels. Armor reduces incoming battle damage.",
     upgrade: "📈 Upgrade owned equipment: `n upgrade 42`. Requires an XP T1 gem and Neo Coins. Raises item level up to 10.",
     enhance: "✨ Enhance owned equipment: `n enhance 42`. Uses Lucky T1 gems and Neo Coins; guaranteed success, up to +5.",
     repair: "🔨 Restore worn equipment: `n repair 42` or `n repair all`. Costs Neo Coins depending on wear and rarity.",
