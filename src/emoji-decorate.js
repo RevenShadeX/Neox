@@ -74,7 +74,8 @@ function lineIcon(line, resolver) {
       armor: ["neox_armor_light","neox_armor_shadow","neox_heavy","neox_mystic","neox_armor_dragon","neox_armor_void"],
     };
     const tiers = ["Common","Uncommon","Rare","Epic","Legendary","Mythic"];
-    const selected = variants[type]?.[tiers.findIndex(r => r.toLowerCase() === rarity.toLowerCase())] || gearNames[type];
+    const index = tiers.findIndex(r => r.toLowerCase() === rarity.toLowerCase());
+    const selected = index >= 0 ? variants[type]?.[index] : gearNames[type];
     return named(resolver,selected) || named(resolver,gearNames[type]);
   }
   const gem = line.match(/\b(lucky|hunting|xp|currency|event)(?:[123]|\s+gem)\b/i);

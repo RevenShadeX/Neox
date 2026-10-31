@@ -60,6 +60,69 @@ function chunks(text, limit = 1900) {
   if (current) out.push(current);
   return out;
 }
+function collectionCards(p, emojis) {
+  const isArmor = p.command === "armors";
+  const title = isArmor ? "🛡️ ARMOR VAULT" : "🗡️ WEAPON ARSENAL";
+  const types = isArmor ? ["armor"] : ["sword", "bow", "dagger", "spear", "staff"];
+  const tierNames = ["Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic"];
+  const iconNames = {
+    sword: ["neox_sword", "neox_greatsword", "neox_katana", "neox_fireblade", "neox_holyblade", "neox_darkblade"],
+    bow: ["neox_bow", "neox_bow", "neox_bow", "neox_bow", "neox_bow", "neox_bow"],
+    dagger: ["neox_dagger", "neox_claw", "neox_dagger", "neox_claw", "neox_dagger", "neox_claw"],
+    spear: ["neox_spear", "neox_spear", "neox_spear", "neox_spear", "neox_spear", "neox_spear"],
+    staff: ["neox_staff", "neox_wand", "neox_staff", "neox_wand", "neox_staff", "neox_wand"],
+    armor: ["neox_armor_light", "neox_armor_shadow", "neox_heavy", "neox_mystic", "neox_armor_dragon", "neox_armor_void"],
+  };
+  const cards = [];
+  for (const type of types) {
+    const entries = (p.items || []).filter(item => item.type === type);
+    const lines = entries.map(item => {
+      const tier = Math.max(0, tierNames.indexOf(item.rarity));
+      const names = iconNames[type];
+      const emoji = emojis?.named?.(names[tier]) || emojis?.named?.(names[0]) || (isArmor ? "🛡️" : "🗡️");
+      const owned = item.state.startsWith("OWNED");
+      const name = item.name.replace(/^(Ash|Copper|Veil|Astral|Crown|Rift) /, "");
+      return `${emoji} **${item.name}** · ${item.rarity}\n   ${owned ? "✅ " + item.state : "▫️ Not collected"}`;
+    });
+    cards.push({
+      content: "",
+      embeds: [{
+        color: isArmor ? 0x5865a8 : 0x9b3147,
+        title: `${title}  /  ${type.toUpperCase()}`,
+        description: lines.join("\n\n").slice(0, 3900) || "No items available.",
+        footer: { text: "NEOX • Use n equip <gear-id> to equip owned gear" },
+      }],
+      allowedMentions: { parse: [] },
+    });
+  }
+  return cards;
+}
+function dailyCard(p) {
+  return { content: "", embeds: [{
+    color: 0x35c99e, title: "🎁 DAILY SUPPLY DROP",
+    description: "**Claim successful**\nYour daily rewards have been added to your inventory.",
+    fields: [
+      { name: "🪙 DARK COINS", value: `**+${p.reward.toLocaleString("en-US")}**`, inline: true },
+      { name: "📦 DAILY CACHE", value: "**+1**", inline: true },
+      { name: "⏳ NEXT CLAIM", value: `<t:${Math.floor(p.nextAt / 1000)}:R>`, inline: false },
+    ],
+    footer: { text: "NEOX • Return tomorrow for your next supply drop" },
+  }], allowedMentions: { parse: [] } };
+}
+function lootCards(p) {
+  const rewards = p.rewards || [];
+  const pages = [];
+  for (let offset = 0; offset < rewards.length; offset += 12) {
+    const slice = rewards.slice(offset, offset + 12);
+    pages.push({ content: "", embeds: [{
+      color: 0x8251c9, title: "📦 CACHE UNSEALED",
+      description: `**${p.opened}** cache${p.opened === 1 ? "" : "s"} opened · **${rewards.reduce((n, x) => n + x.quantity, 0)}** rewards\n\n` +
+        slice.map(r => `• **${r.name}**  ×${r.quantity}`).join("\n"),
+      footer: { text: `NEOX • Loot results ${pages.length + 1}/${Math.max(1, Math.ceil(rewards.length / 12))}` },
+    }], allowedMentions: { parse: [] } });
+  }
+  return pages.length ? pages : [{ content: "No rewards.", allowedMentions: { parse: [] } }];
+}
 function createClient(
   game,
   { animation = {}, profiles = {}, emojis = new EmojiResolver(), roles } = {},
@@ -237,6 +300,12 @@ function createClient(
           allowedMentions: UI.allowedMentions,
         });
       }
+    } else if (p?.kind === "daily") {
+      await transport.show(dailyCard(p));
+    } else if (p?.kind === "collection") {
+      const cards = collectionCards(p, emojis);
+      await transport.show(cards[0]);
+      for (const card of cards.slice(1)) await transport.extra(card);
     } else if (p?.kind === "loot") {
       const finds = p.rareFinds || [];
       if (finds.length) {
@@ -245,7 +314,9 @@ function createClient(
           catch (e) { logError("Loot artwork unavailable:", e); await transport.show({ content: `✨ **${item.rarity.toUpperCase()} DROP!** • ${item.name}`, allowedMentions: UI.allowedMentions }); }
         }
       }
-      await transport.show({ content: output.content, allowedMentions: UI.allowedMentions });
+      const cards = lootCards(p);
+      await transport.show(cards[0]);
+      for (const card of cards.slice(1)) await transport.extra(card);
     } else if (p?.kind === "card") {
       const cards = UI.commandCards(output);
       if (p.combat) {

@@ -448,7 +448,7 @@ class Game {
         const reward = 1200;
         this.money(id, reward, "daily");
         this.item(id, "box", "daily", 1);
-        return `🎁 **Daily reward claimed!**\n🪙 +${fmt(reward)} Dark Coins\n📦 +1 Daily Cache\n\n⏳ Your next daily reward is available in 24 hours.`;
+        return { content: `Daily reward: ${fmt(reward)} Dark Coins and 1 Daily Cache`, presentation: { kind: "daily", reward, nextAt: this.clock() + 86400000 } };
       }
       case "history": {
         const page = a[0] ? n(a[0], 1, 100) : 1;
@@ -799,7 +799,7 @@ class Game {
             : "NOT OWNED";
           return item.name + " [" + item.rarity + "] • " + state;
         });
-        return "**" + (name === "armors" ? "ARMOR" : "WEAPON") + " COLLECTION**\n" + this.page(lines, undefined, 100) + "\n\nUse n equip gear-id to equip an owned item.";
+        return { content: lines.join("\\n"), presentation: { kind: "collection", command: name, items: weapons.map((item, i) => ({ name: item.name, rarity: item.rarity, type: item.type, state: lines[i].split(" • ").slice(1).join(" • ") })) } };
       }
       case "equipment": {
         const s = this.stats(id);
@@ -999,7 +999,7 @@ class Game {
         // Loot boxes grant items only; currency creation is restricted.
         return {
           content: `Opened ${opened} boxes • monster and item rewards\n${[...rewards].map(([s, q]) => `${s} ×${q}`).join("\n")}`,
-          presentation: { kind: "loot", opened, rareFinds: rareFinds.slice(0, 5) },
+          presentation: { kind: "loot", opened, rareFinds: rareFinds.slice(0, 5), rewards: [...rewards].map(([name, quantity]) => ({ name, quantity })) },
         };
       }
       case "pet": {
