@@ -66,9 +66,14 @@ async function battleImage(p, playerAvatar, opponentAvatar){
   text(c,b.hp+" / 100 HP",55,339,23,"#dce8ff");text(c,Math.max(0,b.enemyHP)+" / "+(b.enemyMaxHP||100)+" HP",490,339,23,"#ffe0e7");
   text(c,String(b.enemy).slice(0,38),490,382,21,"#bfc7e2");
   text(c,"ATK "+(b.playerAttack||0)+"  DEF "+(b.playerDefense||0),55,382,19,"#bfc7e2");
-  text(c,"ATK "+(b.opponentAttack||0)+"  DEF "+(b.opponentDefense||0),490,405,18,"#bfc7e2");
-  round(c,50,404,800,54,12,"#191e38");
-  text(c,b.stage!=null?(b.won?"STAGE CLEARED  →  NEXT STAGE "+b.nextStage:"STAGE "+b.stage+"  •  RETRY TO PROGRESS"):"XP EARNED  +"+b.xp,73,439,22,accent,800);
+  text(c,"ATK "+(b.opponentAttack||0)+"  DEF "+(b.opponentDefense||0),490,395,18,"#bfc7e2");
+  round(c,50,413,800,54,12,"#191e38");
+  const rewardText = b.weaponCache
+    ? "WEAPON CACHE WON!  Open with: n open weapon"
+    : b.stage!=null
+      ? (b.won ? "STAGE CLEARED  •  NEXT STAGE "+b.nextStage : "STAGE "+b.stage+"  •  RETRY TO PROGRESS")
+      : "XP EARNED  +"+b.xp;
+  text(c,rewardText,73,448,b.weaponCache?23:21,b.weaponCache?"#f7b74d":accent,800);
   return new AttachmentBuilder(canvas.toBuffer("image/png"),{name:"neox-battle.png"});
 }
 module.exports={lootImage,battleImage};

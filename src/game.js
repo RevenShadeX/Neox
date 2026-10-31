@@ -788,9 +788,10 @@ class Game {
         this.sql("UPDATE gear SET enhance=enhance+1 WHERE id=?").run(g.id);
         return `Enhanced #${g.id} to +${g.enhance + 1}. Guaranteed success.`;
       }
+      case "armors":
       case "weapons": {
         const owned = this.sql("SELECT id,item,slot FROM gear WHERE user=? ORDER BY id").all(id);
-        const weapons = C.equipment.filter((item) => item.slot === "weapon");
+        const weapons = C.equipment.filter((item) => item.slot === (name === "armors" ? "armor" : "weapon"));
         const lines = weapons.map((item) => {
           const copies = owned.filter((gear) => gear.item === item.id);
           const state = copies.length
@@ -798,7 +799,7 @@ class Game {
             : "NOT OWNED";
           return item.name + " [" + item.rarity + "] • " + state;
         });
-        return "**WEAPON COLLECTION**\n" + this.page(lines, undefined, 100) + "\n\nUse n equip gear-id to equip an owned weapon.";
+        return "**" + (name === "armors" ? "ARMOR" : "WEAPON") + " COLLECTION**\n" + this.page(lines, undefined, 100) + "\n\nUse n equip gear-id to equip an owned item.";
       }
       case "equipment": {
         const s = this.stats(id);
@@ -1121,7 +1122,7 @@ class Game {
           content: `${enemy ? `Ranked spar against <@${enemyId}>` : boss ? "Boss battle against the Sovereign of the Rift" : `Expedition Stage ${stage} against ${elite ? "the Eternal Rift Sovereign" : stageBoss ? "a Rift Overlord" : "a Rift Sentinel"}`}\n${log.join("\n")}\n${draw ? "Draw" : won ? "Victory" : "Defeat"} • +0 Dark Coins • ${won ? 35 : 15} hunting XP\nRanked sparring uses saved equipment; no opponent coins are taken.\nEquipped gear loses 1–4% condition per fight. Repair with n repair all.${battleLoot}`,
           presentation: {
             kind: "card", command: name,
-            combat: { won, draw, hp: Math.max(0, hp), enemyHP: Math.max(0, ehp), userId: id, enemyId, playerLevel: level(p), opponentLevel: enemy ? level(enemy) : null, playerAttack: me.attack, opponentAttack: foe.attack, playerDefense: me.defense, opponentDefense: foe.defense,
+            combat: { won, draw, weaponCache: !!battleLoot, hp: Math.max(0, hp), enemyHP: Math.max(0, ehp), userId: id, enemyId, playerLevel: level(p), opponentLevel: enemy ? level(enemy) : null, playerAttack: me.attack, opponentAttack: foe.attack, playerDefense: me.defense, opponentDefense: foe.defense,
               enemy: enemy ? `<@${enemyId}>` : boss ? "Sovereign of the Rift" : elite ? "Eternal Rift Sovereign" : stageBoss ? "Rift Overlord" : "Rift Sentinel",
               stage, stageBoss, elite, enemyMaxHP, nextStage: stage === null ? null : stage + (won && !draw && stage < 1000000000 ? 1 : 0),
               log, xp: won ? 35 : 15 },
