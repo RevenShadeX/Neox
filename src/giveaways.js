@@ -19,17 +19,45 @@ function amount(value) {
   assert(Number.isSafeInteger(n) && n >= 1 && n <= MAX, `Amount must be 1–${MAX.toLocaleString("en-US")}.`);
   return n;
 }
+const MAX_DURATION = 30 * 86400000;
+function duration(value) {
+  const input = String(value || "").trim().toLowerCase();
+  let ms = 0;
+  if (/^\d+$/.test(input)) ms = Number(input) * 60000;
+  else {
+    assert(/^(?:\d+[dhm]\s*)+$/.test(input), "Use minutes or durations such as 30m, 6h, 3d 12h.");
+    const seen = new Set();
+    for (const part of input.matchAll(/(\d+)([dhm])/g)) {
+      assert(!seen.has(part[2]), "Use each duration unit only once.");
+      seen.add(part[2]);
+      ms += Number(part[1]) * ({d:86400000,h:3600000,m:60000}[part[2]]);
+    }
+  }
+  assert(Number.isSafeInteger(ms) && ms >= 60000 && ms <= MAX_DURATION, "Duration must be 1 minute–30 days.");
+  return ms;
+}
+function setupValues(args) {
+  assert(args.length >= 2 && args.length <= 5, "Usage: giveaway total-coins duration [winners]");
+  const parts = args.slice(1);
+  const winners = parts.length > 1 && /^\d+$/.test(parts.at(-1)) ? amount(parts.pop()) : 1;
+  const total = amount(args[0]), milliseconds = duration(parts.join(" "));
+  assert(winners <= 20 && total % winners === 0, "Use 1–20 winners and a total divisible by the winner count.");
+  return {total, winners, milliseconds};
+}
 class Giveaways {
   constructor(game, configuredOwner = "") { this.game = game; this.ownerId = ownerId(configuredOwner); }
   requireOwner(user) { assert(this.ownerId && user === this.ownerId, "Only the bot owner can manage giveaway allowances."); }
-  requireServerOwner(ctx) { assert(ctx.guildOwnerId && ctx.userId === ctx.guildOwnerId, "Only the current server owner can use this command."); }
+  requireManager(ctx) { assert(ctx.guildOwnerId && (ctx.userId === ctx.guildOwnerId || ctx.administrator === true), "Only the current server owner or an Administrator can use this command."); }
   audit(guild, action, value = 0, reference = "") {
     this.game.sql("INSERT INTO giveaway_audit(guild,action,amount,reference,at) VALUES(?,?,?,?,?)").run(guild, action, value, reference, this.game.clock());
   }
   grant(guild) {
     const g = this.game, p = period(g.clock());
+    // Keep the legacy approved column as the enabled/paused flag; new servers
+    // are enabled automatically without changing existing pauses or allowances.
+    g.sql("INSERT OR IGNORE INTO giveaway_servers(guild,approved) VALUES(?,1)").run(guild);
     const server = g.sql("SELECT * FROM giveaway_servers WHERE guild=?").get(guild);
-    assert(server?.approved, "This server is not approved for giveaway funding.");
+    assert(server?.approved, "Giveaway funding is paused for this server.");
     g.sql("UPDATE giveaway_funds SET available=0 WHERE guild=? AND month<>?").run(guild, p.month);
     const monthly = server.amount ?? g.sql("SELECT amount FROM giveaway_settings WHERE id=1").get().amount;
     const inserted = g.sql("INSERT OR IGNORE INTO giveaway_funds(guild,month,allowance,available) VALUES(?,?,?,?)").run(guild, p.month, monthly, monthly).changes;
@@ -40,12 +68,9 @@ class Giveaways {
     const g = this.game, present = new Set(installed);
     g.db.transaction(() => {
       g.sql("UPDATE giveaway_funds SET available=0 WHERE month<>?").run(period(g.clock()).month);
-      let cursor = "";
-      for (;;) {
-        const rows = g.sql("SELECT guild FROM giveaway_servers WHERE approved=1 AND guild>? ORDER BY guild LIMIT 100").all(cursor);
-        if (!rows.length) break;
-        for (const row of rows) if (present.has(row.guild)) this.grant(row.guild);
-        cursor = rows.at(-1).guild;
+      for (const guild of present) {
+        const server = g.sql("SELECT approved FROM giveaway_servers WHERE guild=?").get(guild);
+        if (!server || server.approved) this.grant(guild);
       }
     }).immediate();
   }
@@ -54,7 +79,7 @@ class Giveaways {
     const g = this.game, [action, guild, value] = args;
     if (!action) {
       const setting = g.sql("SELECT amount FROM giveaway_settings WHERE id=1").get().amount;
-      return `**GIVEAWAY ALLOWANCES**\nDefault: ${setting.toLocaleString("en-US")} Neo Coins/month\nApproval required. Unused funds expire each UTC calendar month. Changes apply to future grants.\nUse help ownersmoney for management commands.`;
+      return `**GIVEAWAY ALLOWANCES**\nDefault: ${setting.toLocaleString("en-US")} Neo Coins/month\nAll installed servers are eligible. Unreserved funds expire each UTC calendar month. Changes apply to future grants.\nUse help ownersmoney for management commands.`;
     }
     if (action === "default") {
       assert(args.length === 2, "Usage: ownersmoney default amount");
@@ -79,7 +104,10 @@ class Giveaways {
       return `Server ${guild} approved. Current giveaway fund: ${fund.available.toLocaleString("en-US")} Neo Coins. No personal wallet was credited.`;
     }
     const server = g.sql("SELECT * FROM giveaway_servers WHERE guild=?").get(guild);
-    assert(server, "Approve this server first.");
+    if (!server) {
+      assert(ctx.installedGuildId === guild, "The bot must be installed in that server.");
+      g.sql("INSERT INTO giveaway_servers(guild,approved) VALUES(?,1)").run(guild);
+    }
     if (action === "set") {
       assert(args.length === 3, "Usage: ownersmoney set server-id amount");
       const n = amount(value); g.sql("UPDATE giveaway_servers SET amount=? WHERE guild=?").run(n, guild);
@@ -97,23 +125,25 @@ class Giveaways {
     return `Giveaway funding ${action === "resume" ? "resumed" : "paused"} for ${guild}.`;
   }
   fund(ctx) {
-    this.requireServerOwner(ctx); const f = this.grant(ctx.guildId);
-    return `**SERVER GIVEAWAY FUND**\n${f.available.toLocaleString("en-US")} / ${f.allowance.toLocaleString("en-US")} Neo Coins available for ${f.month} (UTC).\nSeparate from your wallet. Giveaway use only; unused funds expire.\nStart: giveaway total-coins minutes [winners].`;
+    this.requireManager(ctx); const f = this.grant(ctx.guildId);
+    return `**SERVER GIVEAWAY FUND**\n${f.available.toLocaleString("en-US")} / ${f.allowance.toLocaleString("en-US")} Neo Coins available for ${f.month} (UTC).\nSeparate from your wallet. Giveaway use only; unreserved funds expire. Confirmed prizes survive month-end.\nStart: giveaway (setup panel) or giveaway total-coins duration [winners].`;
   }
   create(args, ctx) {
-    this.requireServerOwner(ctx); const g = this.game;
+    this.requireManager(ctx); const g = this.game;
+    if (!args.length) {
+      const fund = this.grant(ctx.guildId);
+      const result = g.sessions.create("giveaway", ctx, { channel: ctx.channelId, total: 1000, winners: 1, milliseconds: 3600000 });
+      return this.setupResult(result.presentation.session, fund);
+    }
     if (args[0] === "cancel") {
       assert(args.length === 2, "Usage: giveaway cancel giveaway-id");
       const row = g.sql("SELECT guild,status FROM server_giveaways WHERE id=?").get(args[1]);
       assert(row?.guild === ctx.guildId && row.status === "open", "That giveaway is not open in this server.");
-      this.cancel(args[1], "cancelled by server owner"); return { content: "Giveaway cancelled. Unspent funds returned if still in the current month.", completed: false };
+      this.cancel(args[1], "cancelled by server manager"); return { content: "Giveaway cancelled. Unspent funds returned if still in the current month.", completed: false };
     }
-    assert(args.length >= 2 && args.length <= 3, "Usage: giveaway total-coins minutes [winners]");
     assert(snowflake(ctx.channelId), "Use this command in a server channel.");
-    const total = amount(args[0]), minutes = amount(args[1]), winners = args[2] ? amount(args[2]) : 1;
-    assert(minutes <= 10080 && winners <= 20 && total % winners === 0, "Use 1–10080 minutes, 1–20 winners, and a total divisible by the winner count.");
-    const ends = g.clock() + minutes * 60000, p = period(g.clock());
-    assert(ends < p.end, "The giveaway must finish before this UTC month ends. Choose a shorter duration.");
+    const {total, winners, milliseconds} = setupValues(args);
+    const ends = g.clock() + milliseconds, p = period(g.clock());
     const fund = this.grant(ctx.guildId); assert(fund.available >= total, "Not enough giveaway funds. Personal coins cannot fund this command.");
     assert(g.sql("SELECT COUNT(*) AS n FROM server_giveaways WHERE guild=? AND status IN('open','drawing')").get(ctx.guildId).n < 3, "At most three giveaways may be active per server.");
     const token = id();
@@ -122,13 +152,37 @@ class Giveaways {
     this.audit(ctx.guildId, "reserved", total, token);
     return { completed: false, content: `Giveaway ${token} started: ${total.toLocaleString("en-US")} Neo Coins.`, presentation: { kind: "giveaway", id: token, total, winners, ends } };
   }
+  setupResult(session, fund = this.grant(session.guild)) {
+    return {completed:false, content:"Giveaway setup", presentation:{kind:"giveaway-setup", session, available:fund.available, ends:this.game.clock()+session.state.milliseconds}};
+  }
+  setup(token, version, action, values, ctx) {
+    const g = this.game;
+    g.requireChannelEnabled(ctx);
+    this.requireManager(ctx);
+    const session = g.sessions.verify(token, version, ctx);
+    assert(session.kind === "giveaway" && session.state.channel === ctx.channelId, "Use this setup in its original channel.");
+    if (action === "cancel") {
+      g.sessions.save(session, true);
+      return {completed:false, content:"Giveaway setup cancelled. No funds reserved."};
+    }
+    if (action === "edit") {
+      session.state = {...session.state, ...setupValues([values.amount, values.duration, values.winners])};
+      return this.setupResult(g.sessions.save(session));
+    }
+    assert(action === "confirm", "Invalid giveaway setup action.");
+    g.requireAgreement(ctx.userId);
+    const v = session.state;
+    const result = this.create([String(v.total), String(v.milliseconds / 60000), String(v.winners)], ctx);
+    g.sessions.save(session, true);
+    return result;
+  }
   enter(token, ctx) {
     const g = this.game, row = g.sql("SELECT * FROM server_giveaways WHERE id=?").get(token);
     g.requireChannelEnabled(ctx);
     assert(row && row.channel === ctx.channelId && row.guild === ctx.guildId && row.status === "open" && row.ends > g.clock(), "This giveaway is closed or belongs to another server.");
     assert(g.sql("SELECT approved FROM giveaway_servers WHERE guild=?").get(row.guild)?.approved, "Giveaway funding is paused.");
     assert(ctx.memberVerified === true && ctx.userIsBot === false, "Only verified, non-bot server members can enter.");
-    assert(ctx.guildOwnerId && ctx.userId !== ctx.guildOwnerId && ctx.userId !== row.owner, "Server owners cannot enter their server's giveaway.");
+    assert(ctx.userId !== row.owner, "The giveaway creator cannot enter their giveaway.");
     g.requireAgreement(ctx.userId);
     assert(g.player(ctx.userId).wallet <= MAX - row.total / row.winners, "Your wallet has no room for this prize.");
     const existing = g.sql("SELECT 1 FROM giveaway_entries WHERE giveaway=? AND user=?").get(token, ctx.userId);
@@ -138,6 +192,9 @@ class Giveaways {
     return "You entered! Winners are chosen randomly when the timer ends.";
   }
   cancel(token, reason) {
+    return this.game.db.transaction(() => this.cancelInside(token, reason)).immediate();
+  }
+  cancelInside(token, reason) {
     const g = this.game, row = g.sql("SELECT * FROM server_giveaways WHERE id=?").get(token);
     if (!row || !["open", "drawing"].includes(row.status)) return false;
     g.sql("UPDATE server_giveaways SET status='cancelled',reason=?,lease=NULL,lease_until=0 WHERE id=?").run(reason, token);
@@ -160,10 +217,10 @@ class Giveaways {
       if (!live || live.status !== "drawing" || live.lease !== row.lease) return null;
       const prize = live.total / live.winners;
       const valid = winners.length === live.winners && new Set(winners).size === winners.length && currentOwner && winners.every(user =>
-        user !== currentOwner && user !== live.owner && g.sql("SELECT 1 FROM giveaway_entries WHERE giveaway=? AND user=?").get(live.id, user)
+        user !== live.owner && g.sql("SELECT 1 FROM giveaway_entries WHERE giveaway=? AND user=?").get(live.id, user)
         && g.sql("SELECT 1 FROM agreements WHERE user=?").get(user) && g.player(user).wallet <= MAX - prize);
-      if (live.month !== period(g.clock()).month || !g.sql("SELECT approved FROM giveaway_servers WHERE guild=?").get(live.guild)?.approved || !valid) {
-        this.cancel(live.id, "expired or insufficient eligible winners"); return { ...live, status: "cancelled", reason: "Expired or insufficient eligible winners. No payout." };
+      if (!g.sql("SELECT approved FROM giveaway_servers WHERE guild=?").get(live.guild)?.approved || !valid) {
+        this.cancel(live.id, "paused or insufficient eligible winners"); return { ...live, status: "cancelled", reason: "Paused or insufficient eligible winners. No payout." };
       }
       for (const user of winners) {
         g.economy.adjust(user, prize, `giveaway ${live.id}`);
@@ -187,8 +244,8 @@ class GiveawayRecovery {
     for (const { id: token } of due) {
       const row = s.claim(token); if (!row) continue;
       try {
-        if (!installed.includes(row.guild) || row.month !== period(g.clock()).month) {
-          g.db.transaction(() => s.cancel(token, "bot left server or month expired")).immediate(); continue;
+        if (!installed.includes(row.guild)) {
+          g.db.transaction(() => s.cancel(token, "bot left server")).immediate(); continue;
         }
         const owner = await this.api.owner(row.guild);
         const pool = g.sql("SELECT user FROM giveaway_entries WHERE giveaway=? ORDER BY user").all(token).map(r => r.user);
@@ -197,7 +254,7 @@ class GiveawayRecovery {
         for (let offset = 0; offset < Math.min(pool.length, 100) && winners.length < row.winners && Date.now() < deadline; offset += 4) {
           const batch = pool.slice(offset, offset + 4);
           const eligible = await Promise.all(batch.map(async user => {
-            if (user === owner || user === row.owner) return false;
+            if (user === row.owner) return false;
             if (!g.sql("SELECT 1 FROM agreements WHERE user=?").get(user) || g.player(user).wallet > MAX - row.total / row.winners) return false;
             return this.api.eligible(row.guild, user);
           }));
@@ -209,4 +266,4 @@ class GiveawayRecovery {
     }
   }
 }
-module.exports = { Giveaways, GiveawayRecovery, ownerId, period };
+module.exports = { Giveaways, GiveawayRecovery, ownerId, period, duration, setupValues, MAX_DURATION };

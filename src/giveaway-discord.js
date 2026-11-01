@@ -1,14 +1,35 @@
 "use strict";
+const { PermissionFlagsBits } = require("discord.js");
+const { giveawayImage } = require("./visual-cards");
+const { decoratePayload } = require("./emoji-decorate");
+const { payloadPages } = require("./payload-safety");
+const { cleanName, markdownName } = require("./text");
 const { GameError } = require("./errors");
 const { GiveawayRecovery } = require("./giveaways");
 const allowedMentions = { parse: [], repliedUser: false };
 function giveawayPayload(p) {
   return { content: "", embeds: [{ color: 0xc49a54, title: "🎁 SERVER GIVEAWAY",
-    description: `**${p.total.toLocaleString("en-US")} Neo Coins** • ${p.winners} random winner${p.winners === 1 ? "" : "s"}\nEach winner: **${(p.total / p.winners).toLocaleString("en-US")} Neo Coins**\nEnds <t:${Math.floor(p.ends / 1000)}:R>.\n\nAccept Neox rules, then enter below. Server owners and bots are excluded. Prizes become ordinary wallet coins.`,
+    description: `**${p.total.toLocaleString("en-US")} Neo Coins** • ${p.winners} random winner${p.winners === 1 ? "" : "s"}\nEach winner: **${(p.total / p.winners).toLocaleString("en-US")} Neo Coins**\nEnds <t:${Math.floor(p.ends / 1000)}:R>.\n\nAccept Neox rules, then enter below. The giveaway creator and bots are excluded. Prizes become ordinary wallet coins.`,
     footer: { text: `Giveaway ${p.id} • Funded from the restricted server allowance` } }],
     components: [{ type: 1, components: [{ type: 2, style: 1, custom_id: `ng:${p.id}:join`, label: "Enter Giveaway" }] }], allowedMentions };
 }
-function discordGiveaways(client, game, log) {
+function setupPayload(p) {
+  const s = p.session, v = s.state, control = action => `ngs:${s.id}:${s.version}:${action}`;
+  return {content:"", embeds:[{color:0x9e3047, title:"🎁 GIVEAWAY SETUP", description:
+    `Available funds: **${p.available.toLocaleString("en-US")} Neo Coins**\nTotal prize: **${v.total.toLocaleString("en-US")} Neo Coins**\nWinners: **${v.winners}** • Each: **${(v.total/v.winners).toLocaleString("en-US")} Neo Coins**\nDuration: **${v.milliseconds/60000} minutes**\nIf confirmed now, ends <t:${Math.floor(p.ends/1000)}:F>.\n\nFunds are reserved only on Confirm. This panel expires in 10 minutes. Confirm uses the selected duration starting at confirmation.`, footer:{text:"Only the creator can use these controls."}}],
+    components:[{type:1,components:[{type:2,style:2,custom_id:control("edit"),label:"Edit Amount / Duration / Winners"},{type:2,style:3,custom_id:control("confirm"),label:"Confirm"},{type:2,style:4,custom_id:control("cancel"),label:"Cancel"}]}], allowedMentions};
+}
+function singlePayload(payload, emojis) {
+  const pages = payloadPages(decoratePayload(payload, emojis));
+  if (pages.length !== 1) throw Error("Giveaway payload exceeds one message");
+  return pages[0];
+}
+function winnerPayload(result, names, file) {
+  return {content:"", embeds:[{color:0x9e3047,title:"🏆 NEOX GIVEAWAY WINNERS",description:
+    `${result.winnerIds.map((user,i)=>`${i+1}. **${markdownName(cleanName(names[i]).slice(0,32))}** • <@${user}>`).join("\n")}\n\nEach won **${result.prize.toLocaleString("en-US")} Neo Coins**\nTotal prize: **${result.total.toLocaleString("en-US")} Neo Coins**\nPrizes are saved and ready to spend.`,
+    ...(file ? {image:{url:"attachment://neox-giveaway.png"}} : {}),footer:{text:`Giveaway ${result.id}`}}], files:file?[file]:[],attachments:[],components:[],allowedMentions};
+}
+function discordGiveaways(client, game, log, {emojis, render = giveawayImage} = {}) {
   const service = game.giveaways, pending = new Set();
   const guild = id => client.guilds.fetch({ guild: id, force: true });
   const recovery = new GiveawayRecovery(service, {
@@ -28,10 +49,29 @@ function discordGiveaways(client, game, log) {
       if (!result.message) return;
       const channel = await client.channels.fetch(result.channel);
       if (!channel || channel.guildId !== result.guild) throw Error("Giveaway channel unavailable");
-      const message = await channel.messages.fetch(result.message);
-      await message.edit({ content: result.status === "paid"
-        ? `🎉 **GIVEAWAY COMPLETE**\n${result.winnerIds.map(user => `<@${user}>`).join(", ")}\nEach won **${result.prize.toLocaleString("en-US")} Neo Coins**. Prizes are saved in their wallets.`
-        : "Giveaway ended without a payout. The fund was returned if it is still the same month.", embeds: [], components: [], allowedMentions });
+      const message = await channel.messages.fetch(result.message).catch(() => null);
+      if (result.status !== "paid") {
+        await (message ? message.edit.bind(message) : channel.send.bind(channel))(singlePayload({content:"Giveaway ended without a payout. Funds return only to an unexpired original month's allowance.",embeds:[],components:[],allowedMentions}, emojis));
+        return;
+      }
+      const names = await Promise.all(result.winnerIds.map(async user => {
+        try { const member = await client.guilds.cache.get(result.guild)?.members.fetch({user,force:true,cache:false}); return cleanName(member?.displayName || member?.user?.globalName || member?.user?.username || user); }
+        catch { return user; }
+      }));
+      let file;
+      try { file = await render(result, names); } catch (e) { log("Giveaway rendering failed; using embed:", e); }
+      try {
+        if (!message) throw Error("Original giveaway message unavailable");
+        await message.edit(singlePayload(winnerPayload(result,names,file),emojis));
+      }
+      catch (e) {
+        // Settlement is already durable. Delivery retries never invoke the draw.
+        let fallback;
+        try { fallback = singlePayload(winnerPayload(result,names),emojis); }
+        catch { fallback = singlePayload(winnerPayload(result,names)); }
+        try { if (!message) throw Error("Original giveaway message unavailable"); await message.edit(fallback); }
+        catch { await channel.send(fallback); }
+      }
     },
   }, log);
   return {
@@ -39,13 +79,45 @@ function discordGiveaways(client, game, log) {
     async enrich(name, args, source, ctx) {
       if (name === "ownersmoney") {
         service.requireOwner(ctx.userId);
-        if (["approve", "resume"].includes(args[0])) {
+        if (["approve", "resume", "set", "pause"].includes(args[0])) {
           const target = args[1];
           if (client.guilds.cache.has(target)) ctx.installedGuildId = target;
         }
       } else if (["giveaway", "giveawayfund"].includes(name)) {
         const current = await guild(ctx.guildId); ctx.guildOwnerId = current.ownerId;
+        if (ctx.userId !== current.ownerId) {
+          const member = await current.members.fetch({user:ctx.userId,force:true,cache:false});
+          ctx.administrator = member.id === ctx.userId && member.permissions?.has(PermissionFlagsBits.Administrator) === true;
+        }
       }
+    },
+    async setup(i, ctx) {
+      const match = /^ngs:([a-f0-9]{24}):(\d+):(edit|confirm|cancel|values)$/.exec(i.customId || "");
+      if (!match || !(i.isButton?.() || i.isModalSubmit?.())) throw new GameError("Invalid giveaway setup control.");
+      const [,token, versionText, action] = match, version = Number(versionText);
+      const session = game.sessions.verify(token,version,ctx);
+      if (session.kind !== "giveaway" || session.state.channel !== ctx.channelId) throw new GameError("Use this setup in its original channel.");
+      game.requireChannelEnabled(ctx);
+      if (action === "edit") {
+        if (!i.isButton?.()) throw new GameError("Invalid setup control.");
+        await i.showModal({custom_id:`ngs:${token}:${version}:values`,title:"Giveaway settings",components:
+          [["amount","Total Neo Coins",String(session.state.total)],["duration","Duration (30m, 6h, 3d 12h)",String(session.state.milliseconds/60000)],["winners","Winner count (1–20)",String(session.state.winners)]].map(([custom_id,label,value])=>({type:1,components:[{type:4,style:1,custom_id,label,value,required:true,max_length:60}]}))});
+        return;
+      }
+      await i.deferUpdate();
+      await this.enrich("giveaway", [], i, ctx);
+      service.requireManager(ctx);
+      if ((action === "values") !== !!i.isModalSubmit?.()) throw new GameError("Invalid setup control.");
+      const values = action === "values" ? Object.fromEntries(["amount","duration","winners"].map(k=>[k,i.fields.getTextInputValue(k)])) : {};
+      const result = game.request(ctx,()=>service.setup(token,version,action === "values" ? "edit" : action,values,ctx));
+      const p = result.presentation;
+      if (p?.kind === "giveaway") {
+        try {
+          const sent = await i.editReply(singlePayload(giveawayPayload(p),emojis));
+          const messageId = sent?.id || i.message?.id;
+          if (messageId) game.sql("UPDATE server_giveaways SET message=? WHERE id=? AND status='open'").run(messageId,p.id);
+        } catch (e) { service.cancel(p.id,"publication failed"); throw e; }
+      } else await i.editReply(singlePayload(p ? setupPayload(p) : {content:result.content,embeds:[],components:[],allowedMentions},emojis));
     },
     async enter(i, ctx) {
       const match = /^ng:([a-f0-9]{24}):join$/.exec(i.customId || "");
@@ -64,7 +136,10 @@ function discordGiveaways(client, game, log) {
       } finally { pending.delete(ctx.userId); }
     },
     async identifyOwner() {
-      if (!service.ownerId && client.application) {
+      // Runtime authorization is derived from Discord, never a server role or
+      // an unverified configured owner ID. Failed discovery leaves controls closed.
+      service.ownerId = "";
+      if (client.application) {
         const application = await client.application.fetch();
         const candidate = application.owner?.ownerId || application.owner?.id;
         if (/^\d{5,22}$/.test(candidate || "")) service.ownerId = candidate;
@@ -72,4 +147,4 @@ function discordGiveaways(client, game, log) {
     },
   };
 }
-module.exports = { giveawayPayload, discordGiveaways };
+module.exports = { giveawayPayload, setupPayload, winnerPayload, singlePayload, discordGiveaways };

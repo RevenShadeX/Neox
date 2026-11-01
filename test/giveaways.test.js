@@ -28,7 +28,7 @@ test("only exact bot owner can manage funds; admins and server owners cannot",t=
   assert.throws(()=>f.run("giveawayfund",[],A,{manageGuild:true}),/current server owner/);
   assert.equal(ownerId(""),"");assert.throws(()=>ownerId("invalid"),/BOT_OWNER_ID/);
 });
-test("monthly approvals and remove/rejoin cannot refill a month's fund",t=>{
+test("monthly grants and remove/rejoin cannot refill a month's fund",t=>{
   const f=fixture(t);f.approve();f.start();
   const balance=f.store.sql("SELECT available FROM giveaway_funds WHERE guild=?").get(G).available;
   f.approve("2m");f.game.giveaways.reconcile([G]);f.game.giveaways.reconcile([]);f.game.giveaways.reconcile([G]);
@@ -53,7 +53,7 @@ test("default allowance is configurable, snapshot per month and personal wallets
 });
 test("giveaways reserve funds atomically; invalid or oversubscribed giveaways change nothing",t=>{
   const f=fixture(t);f.approve("1000");
-  for(const args of [["1001","1"],["10","1","3"],["1","0"],["1","10081"],["100","1","21"]])assert.throws(()=>f.start(args));
+  for(const args of [["1001","1"],["10","1","3"],["1","0"],["1","43201"],["100","1","21"]])assert.throws(()=>f.start(args));
   assert.equal(f.store.sql("SELECT available FROM giveaway_funds").get().available,1000);
   const p=f.start(["600","1"]);assert.equal(f.store.sql("SELECT available FROM giveaway_funds").get().available,400);
   assert.throws(()=>f.start(["500","1"]),/Not enough giveaway/);
@@ -61,9 +61,9 @@ test("giveaways reserve funds atomically; invalid or oversubscribed giveaways ch
   assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM server_giveaways").get().n,1);
   assert.equal(f.game.player(S).wallet,0);assert.equal(giveawayPayload(p).components[0].components[0].custom_id,`ng:${p.id}:join`);
 });
-test("entry rejects owners, bots, unverified members, wrong server/channel and disabled channels",t=>{
+test("entry rejects creators, bots, unverified members, wrong server/channel and disabled channels",t=>{
   const f=fixture(t);f.approve();const p=f.start();
-  assert.throws(()=>f.enter(p.id,S),/Server owners/);
+  assert.throws(()=>f.enter(p.id,S),/creator/);
   assert.throws(()=>f.enter(p.id,A,{userIsBot:true}),/non-bot/);
   assert.throws(()=>f.enter(p.id,A,{memberVerified:false}),/verified/);
   assert.throws(()=>f.enter(p.id,A,{guildId:H}),/another server/);
@@ -82,7 +82,7 @@ test("random giveaway pays eligible members normal Neo Coins once, even when ann
   assert.equal(f.store.sql("SELECT SUM(amount) AS n FROM economy_events WHERE source='server giveaways'").get().n,1000);
   f.run("buy",["food","1"],A);assert.equal(f.game.player(A).wallet,400);
 });
-test("draw rejects new server owners, departed members and insufficient participants without losing the fund",async t=>{
+test("draw rejects departed members and insufficient participants without losing the fund",async t=>{
   const f=fixture(t);f.approve();const p=f.start(["1000","1","2"]);f.enter(p.id,A);f.enter(p.id,B);f.tick(61000);
   await runner(f,{owner:async()=>A,eligible:async()=>false}).recover();
   assert.equal(f.game.player(A).wallet,0);assert.equal(f.game.player(B).wallet,0);
@@ -106,16 +106,18 @@ test("pause cancels reservations; resume never refills current month's spent mon
   const left=f.store.sql("SELECT available FROM giveaway_funds").get().available;
   const active=f.start();f.run("ownersmoney",["pause",G]);
   assert.equal(f.store.sql("SELECT status FROM server_giveaways WHERE id=?").get(active.id).status,"cancelled");
-  assert.throws(()=>f.run("giveawayfund",[],S),/not approved/);
+  assert.throws(()=>f.run("giveawayfund",[],S),/paused/);
   f.run("ownersmoney",["resume",G]);assert.equal(f.store.sql("SELECT available FROM giveaway_funds").get().available,left);
   assert.match(f.run("ownersmoney",["history",G]).content,/paid|pause|resume/);
 });
-test("month expiry cancels overdue giveaways and never backpays earlier months",async t=>{
-  const f=fixture(t);f.approve();const p=f.start();f.enter(p.id);f.set(Date.UTC(2026,11,1));await runner(f).recover();
-  assert.equal(f.game.player(A).wallet,0);assert.equal(f.store.sql("SELECT status FROM server_giveaways WHERE id=?").get(p.id).status,"cancelled");
+test("month-end preserves reservations and pays them without using the new allowance",async t=>{
+  const f=fixture(t);f.game.giveaways.reconcile([G]);
+  f.set(Date.UTC(2026,10,30,23,59));const p=f.start(["1000","3d","1"]);f.enter(p.id);
+  f.set(Date.UTC(2026,11,4));await runner(f).recover();
+  assert.equal(f.game.player(A).wallet,1000);
+  assert.equal(f.store.sql("SELECT status FROM server_giveaways WHERE id=?").get(p.id).status,"paid");
   assert.equal(f.store.sql("SELECT available FROM giveaway_funds WHERE month='2026-11'").get().available,0);
   assert.equal(f.store.sql("SELECT available FROM giveaway_funds WHERE month='2026-12'").get().available,1000000);
-  f.set(Date.UTC(2026,11,31,23,59,30));assert.throws(()=>f.start(),/before this UTC month/);
 });
 test("transient membership failures retain a retryable lease and restart pays only once",async t=>{
   const f=fixture(t);f.approve();const p=f.start();f.enter(p.id);f.tick(61000);
@@ -132,7 +134,7 @@ test("stale workers cannot overwrite a newer lease or pay after cancellation",t=
   assert.equal(f.game.giveaways.finish(current,[A],S).status,"paid");
   assert.equal(f.game.giveaways.finish(current,[A],S),null);assert.equal(f.game.player(A).wallet,1000);
 });
-test("cancellation is server-owner-only, idempotent and returns current-month reserves",t=>{
+test("cancellation requires server management, idempotent and returns current-month reserves",t=>{
   const f=fixture(t);f.approve();const p=f.start();
   assert.throws(()=>f.run("giveaway",["cancel",p.id],A),/server owner/);
   f.run("giveaway",["cancel",p.id],S);assert.equal(f.store.sql("SELECT available FROM giveaway_funds").get().available,1000000);
@@ -145,12 +147,12 @@ test("SQLite restart preserves allowance, reservations, entries and completed pa
   const r=new GiveawayRecovery(game.giveaways,{guildIds:()=>[G],owner:async()=>S,eligible:async()=>true,announce:async()=>{}},()=>{});
   await r.recover();assert.equal(game.player(A).wallet,1000);await runner(f).recover();assert.equal(f.game.player(A).wallet,1000);
 });
-test("bot ownership discovery supports application user and team owner, with explicit ID taking precedence",async t=>{
+test("bot ownership discovery supports application user and team owner, and fails closed when application ownership is unavailable",async t=>{
   const f=fixture(t);const service=f.game.giveaways;service.ownerId="";
   const client={guilds:{cache:new Map()},application:{fetch:async()=>({owner:{id:BOT}})}};
   const adapter=discordGiveaways(client,f.game,()=>{});await adapter.identifyOwner();assert.equal(service.ownerId,BOT);
   service.ownerId="";client.application.fetch=async()=>({owner:{id:G,ownerId:BOT}});await adapter.identifyOwner();assert.equal(service.ownerId,BOT);
-  service.ownerId=A;client.application.fetch=async()=>{throw Error("must not fetch");};await adapter.identifyOwner();assert.equal(service.ownerId,A);
+  service.ownerId=A;client.application.fetch=async()=>{throw Error("unavailable");};await assert.rejects(()=>adapter.identifyOwner(),/unavailable/);assert.equal(service.ownerId,"");
 });
 test("Discord entry button verifies membership before saving an entry and privately confirms",async t=>{
   const f=fixture(t);f.approve();const p=f.start();const client=createClient(f.game);t.after(()=>client.destroy());
@@ -177,4 +179,156 @@ test("maintenance trims terminal details but keeps monthly grant records against
   assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM giveaway_winners").get().n,0);
   assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM server_giveaways").get().n,0);
   f.game.giveaways.reconcile([G]);assert.equal(f.store.sql("SELECT available FROM giveaway_funds").get().available,999000);
+});
+
+test("installed servers receive independent default grants without approval; pauses survive discovery",t=>{
+  const f=fixture(t);f.game.giveaways.reconcile([G,H]);
+  assert.equal(f.store.sql("SELECT available FROM giveaway_funds WHERE guild=?").get(G).available,1000000);
+  assert.equal(f.store.sql("SELECT available FROM giveaway_funds WHERE guild=?").get(H).available,1000000);
+  f.run("ownersmoney",["pause",G]);f.game.giveaways.reconcile([G,H]);
+  f.set(Date.UTC(2027,0,1));f.game.giveaways.reconcile([G,H]);
+  assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM giveaway_funds WHERE guild=?").get(G).n,1);
+  assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM giveaway_funds WHERE guild=?").get(H).n,2);
+  assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM giveaway_funds WHERE month='2026-12'").get().n,0);
+});
+test("Administrator can manage server giveaways but Manage Server cannot and roles cannot control allowances",t=>{
+  const f=fixture(t);
+  assert.match(f.run("giveawayfund",[],A,{administrator:true}).content,/1,000,000/);
+  const p=f.run("giveaway",["1000","10d","2"],A,{administrator:true}).presentation;
+  assert.throws(()=>f.enter(p.id,A),/creator/);
+  assert.match(f.enter(p.id,S),/entered/);assert.match(f.enter(p.id,B),/entered/);
+  assert.throws(()=>f.run("giveaway",["1","1"],B,{manageGuild:true}),/Administrator/);
+  assert.throws(()=>f.run("ownersmoney",["default","2m"],A,{administrator:true}),/bot owner/);
+  assert.match(f.run("giveaway",["cancel",p.id],B,{administrator:true}).content,/cancelled/);
+});
+test("server owner and other administrators can win a giveaway created by an administrator",async t=>{
+  const f=fixture(t);const p=f.run("giveaway",["1000","1","2"],A,{administrator:true}).presentation;
+  f.enter(p.id,S);f.enter(p.id,B,{administrator:true});f.tick(61000);
+  await Promise.all([runner(f).recover(),runner(f).recover()]);
+  assert.equal(f.game.player(S).wallet,500);assert.equal(f.game.player(B).wallet,500);assert.equal(f.game.player(A).wallet,0);
+  assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM giveaway_winners").get().n,2);
+});
+test("flexible durations support long and compound values and reject malformed or unsafe inputs",()=>{
+  const {duration,setupValues}=require("../src/giveaways");
+  for(const [input,minutes] of [["30m",30],["6h",360],["3d",4320],["4d",5760],["5d",7200],["10d",14400],["3d 12h",5040],["3d12h",5040],["60",60],["30d",43200]])assert.equal(duration(input),minutes*60000);
+  for(const input of ["", "0", "-1", "1.5h", "1e3", "Infinity", "31d", "99999999999999999d", "3days", "1h 1h", "1h garbage", "1h 2", "1d-1h"])assert.throws(()=>duration(input),undefined,input);
+  assert.deepEqual(setupValues(["1000","3d","12h","2"]),{total:1000,winners:2,milliseconds:5040*60000});
+  assert.equal(setupValues(["1000","60","2"]).milliseconds,3600000);
+});
+test("persistent setup reserves only on confirmation, rejects other creators, stale controls and lost permissions",t=>{
+  const f=fixture(t);const p=f.run("gw",[],A,{administrator:true}).presentation,s=p.session;
+  assert.equal(p.kind,"giveaway-setup");assert.equal(f.store.sql("SELECT available FROM giveaway_funds").get().available,1000000);
+  const action=(user,version,kind,values={},extra={})=>f.game.request(f.ctx(user,extra),()=>f.game.giveaways.setup(s.id,version,kind,values,f.ctx(user,extra)));
+  assert.throws(()=>action(B,0,"confirm",{},{administrator:true}),/another player/);
+  assert.throws(()=>action(A,0,"confirm"),/Administrator/);
+  const edited=action(A,0,"edit",{amount:"10000",duration:"3d 12h",winners:"2"},{administrator:true}).presentation;
+  assert.equal(edited.session.version,1);assert.equal(edited.session.state.total,10000);
+  assert.throws(()=>action(A,0,"confirm",{},{administrator:true}),/stale/);
+  const result=action(A,1,"confirm",{},{administrator:true}).presentation;
+  assert.equal(result.winners,2);assert.equal(result.total,10000);
+  assert.equal(f.store.sql("SELECT available FROM giveaway_funds").get().available,990000);
+  assert.throws(()=>action(A,1,"confirm",{},{administrator:true}),/completed/);
+  assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM server_giveaways").get().n,1);
+});
+test("setup cancellation, expiry, disabled channels and changing funds never accidentally reserve coins",t=>{
+  const f=fixture(t);const p=f.run("giveaway",[],S).presentation;
+  const act=(s,kind="confirm")=>f.game.request(f.ctx(S),()=>f.game.giveaways.setup(s.id,s.version,kind,{},f.ctx(S)));
+  act(p.session,"cancel");assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM server_giveaways").get().n,0);
+  const q=f.run("giveaway",[],S).presentation;f.tick(600001);assert.throws(()=>act(q.session),/expired/);
+  const r=f.run("giveaway",[],S).presentation;f.run("disable",[],S,{manageChannels:true});assert.throws(()=>act(r.session),/disabled/);
+  f.run("enable",[],S,{manageChannels:true});f.start(["1000000","1"]);assert.throws(()=>act(r.session),/Not enough/);
+  assert.equal(f.game.sessions.get(r.session.id).status,"active");
+});
+test("old-month cancellation never refunds into a new allowance and is idempotent",t=>{
+  const f=fixture(t);const p=f.start(["50000","10d"]);f.set(Date.UTC(2026,11,1));f.game.giveaways.reconcile([G]);
+  f.run("giveaway",["cancel",p.id],S);assert.equal(f.game.giveaways.cancel(p.id,"retry"),false);
+  assert.equal(f.store.sql("SELECT available FROM giveaway_funds WHERE month='2026-11'").get().available,0);
+  assert.equal(f.store.sql("SELECT available FROM giveaway_funds WHERE month='2026-12'").get().available,1000000);
+});
+test("all settlement changes roll back together on a write failure",t=>{
+  const f=fixture(t);const p=f.start(["1000","1","2"]);f.enter(p.id,A);f.enter(p.id,B);f.tick(61000);
+  const row=f.game.giveaways.claim(p.id);
+  f.store.db.exec("CREATE TRIGGER fail_giveaway BEFORE INSERT ON giveaway_winners BEGIN SELECT RAISE(ABORT,'test write failure'); END");
+  assert.throws(()=>f.game.giveaways.finish(row,[A,B],S),/test write failure/);
+  assert.equal(f.game.player(A).wallet,0);assert.equal(f.game.player(B).wallet,0);
+  assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM giveaway_winners").get().n,0);
+  assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM giveaway_audit WHERE action='paid'").get().n,0);
+  assert.equal(f.store.sql("SELECT status FROM server_giveaways").get().status,"drawing");
+  f.store.db.exec("DROP TRIGGER fail_giveaway");assert.equal(f.game.giveaways.finish(row,[A,B],S).status,"paid");
+});
+test("one winner card contains all winners and renders a bounded PNG for twenty winners",async()=>{
+  const {giveawayImage}=require("../src/visual-cards"),{winnerPayload,singlePayload}=require("../src/giveaway-discord"),{loadImage}=require("@napi-rs/canvas");
+  const result={id:"a".repeat(24),winnerIds:[A,B],prize:500,total:1000};
+  const file=await giveawayImage(result,["Alice","Bob"]),payload=singlePayload(winnerPayload(result,["Alice","Bob"],file));
+  assert.equal(payload.embeds.length,1);assert.equal(payload.files.length,1);assert.match(payload.embeds[0].description,/Alice/);assert.match(payload.embeds[0].description,/Bob/);
+  assert.match(payload.embeds[0].description,/1,000/);assert.match(payload.embeds[0].description,/500/);
+  const many={...result,winnerIds:Array.from({length:20},(_,i)=>String(100000000000000000n+BigInt(i)))};
+  const png=await giveawayImage(many,Array(20).fill("Long winner name"));const image=await loadImage(png.attachment);
+  assert.equal(image.width,1100);assert.equal(image.height,1040);assert.ok(png.attachment.length<8000000);
+});
+test("announcement rendering and attachment failure use one validated embed without paying twice",async t=>{
+  const f=fixture(t);const p=f.start(["1000","1","2"]);f.enter(p.id,A);f.enter(p.id,B);
+  f.store.sql("UPDATE server_giveaways SET message='55555' WHERE id=?").run(p.id);f.tick(61000);
+  const sent=[],client={guilds:{cache:new Map([[G,{members:{fetch:async({user})=>({id:user,user:{id:user,bot:false},displayName:user===A?"Alice":"Bob"})}}]]),fetch:async()=>({ownerId:S})},channels:{fetch:async()=>({guildId:G,messages:{fetch:async()=>({edit:async payload=>{sent.push(payload);if(payload.files?.length)throw Error("attachments forbidden");}})}})}};
+  const adapter=discordGiveaways(client,f.game,()=>{},{render:async()=>({attachment:Buffer.from("png"),name:"neox-giveaway.png"})});
+  await adapter.recovery.recover();await adapter.recovery.recover();
+  assert.equal(sent.length,2);assert.equal(sent[1].files.length,0);assert.equal(sent[1].embeds.length,1);assert.match(sent[1].embeds[0].description,/Alice[\s\S]*Bob|Bob[\s\S]*Alice/);
+  assert.equal(f.game.player(A).wallet,500);assert.equal(f.game.player(B).wallet,500);
+  assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM giveaway_winners").get().n,2);
+});
+
+test("Discord setup modal edits preview then confirmation re-fetches admin permissions and publishes once",async t=>{
+  const f=fixture(t),{PermissionFlagsBits}=require("discord.js");
+  let admin=true,fetches=0;
+  const client=createClient(f.game);t.after(()=>client.destroy());
+  client.guilds.fetch=async()=>({ownerId:S,members:{fetch:async({user})=>{fetches++;return{id:user,permissions:{has:bit=>admin&&bit===PermissionFlagsBits.Administrator}};}}});
+  const sent=[];client.emit(Events.MessageCreate,{id:"900000000000088001",author:{id:A,bot:false},guildId:G,channelId:C,guild:{id:G,ownerId:S},createdTimestamp:Date.now(),content:"n gw",channel:{send:async payload=>{sent.push(payload);return{id:"900000000000088002"};}}});
+  for(let i=0;i<40&&!sent.length;i++)await new Promise(resolve=>setTimeout(resolve,5));
+  assert.equal(sent.length,1);assert.match(sent[0].embeds[0].title,/SETUP/);
+  const session=f.store.sql("SELECT * FROM ui_sessions WHERE kind='giveaway'").get();
+  const adapter=discordGiveaways(client,f.game,()=>{}),replies=[];
+  const interaction=(action,version,extra={})=>({customId:`ngs:${session.id}:${version}:${action}`,isButton:()=>action!=="values",isModalSubmit:()=>action==="values",deferUpdate:async()=>{},showModal:async payload=>replies.push(payload),editReply:async payload=>{replies.push(payload);return{id:"900000000000088002"};},message:{id:"900000000000088002"},...extra});
+  await adapter.setup(interaction("edit",0),f.ctx(A));
+  assert.equal(replies[0].components.length,3);assert.match(replies[0].custom_id,/:values$/);
+  await adapter.setup(interaction("values",0,{fields:{getTextInputValue:key=>({amount:"2000",duration:"3d 12h",winners:"2"}[key])}}),f.ctx(A));
+  assert.match(replies[1].embeds[0].description,/2,000/);assert.match(replies[1].embeds[0].description,/1,000/);
+  assert.equal(f.store.sql("SELECT available FROM giveaway_funds").get().available,1000000);
+  admin=false;await assert.rejects(()=>adapter.setup(interaction("confirm",1),f.ctx(A)),/Administrator/);
+  assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM server_giveaways").get().n,0);
+  admin=true;await adapter.setup(interaction("confirm",1),f.ctx(A));
+  const row=f.store.sql("SELECT * FROM server_giveaways").get();assert.equal(row.total,2000);assert.equal(row.winners,2);assert.equal(row.message,"900000000000088002");
+  assert.equal(f.store.sql("SELECT available FROM giveaway_funds").get().available,998000);
+  assert.ok(fetches>=4);
+  await assert.rejects(()=>adapter.setup(interaction("confirm",1),f.ctx(A)),/completed/);
+});
+
+test("render failure and a deleted original message send one complete fallback for all winners",async t=>{
+  const f=fixture(t);const p=f.start(["1000","1","2"]);f.enter(p.id,A);f.enter(p.id,B);f.tick(61000);
+  f.store.sql("UPDATE server_giveaways SET message='55555' WHERE id=?").run(p.id);
+  const sent=[],member=async({user})=>({id:user,user:{bot:false},displayName:user===A?"Alice":"Bob"});
+  const client={guilds:{cache:new Map([[G,{members:{fetch:member}}]]),fetch:async()=>({ownerId:S})},channels:{fetch:async()=>({guildId:G,messages:{fetch:async()=>{throw Error("Unknown message");}},send:async p=>sent.push(p)})}};
+  await discordGiveaways(client,f.game,()=>{},{render:async()=>{throw Error("renderer busy");}}).recovery.recover();
+  assert.equal(sent.length,1);assert.equal(sent[0].files.length,0);assert.match(sent[0].embeds[0].description,/Alice[\s\S]*Bob|Bob[\s\S]*Alice/);
+  assert.deepEqual(sent[0].allowedMentions.parse,[]);assert.equal(f.game.player(A).wallet,500);
+});
+
+test("setup sessions and cross-month reservations survive reopening SQLite without duplicate confirmation or payout",async t=>{
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),"neox-giveaway-setup-"));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+  const filename=path.join(dir,"state.sqlite"),f=fixture(t,{filename});
+  f.set(Date.UTC(2026,10,30,12));const p=f.run("giveaway",[],S).presentation;
+  const store=open(filename);t.after(()=>store.close());const game=new Game(store,{clock:f.clock});
+  const confirmed=game.request(f.ctx(S),()=>game.giveaways.setup(p.session.id,0,"confirm",{},f.ctx(S))).presentation;
+  assert.throws(()=>f.game.request(f.ctx(S),()=>f.game.giveaways.setup(p.session.id,0,"confirm",{},f.ctx(S))),/completed/);
+  f.enter(confirmed.id);f.set(Date.UTC(2026,11,1));
+  const r=new GiveawayRecovery(game.giveaways,{guildIds:()=>[G],owner:async()=>S,eligible:async()=>true,announce:async()=>{}},()=>{});
+  await Promise.all([r.recover(),runner(f).recover()]);
+  assert.equal(game.player(A).wallet,1000);assert.equal(f.game.player(A).wallet,1000);
+  assert.equal(store.sql("SELECT COUNT(*) AS n FROM giveaway_winners").get().n,1);
+  assert.equal(store.sql("SELECT available FROM giveaway_funds WHERE month='2026-12'").get().available,1000000);
+});
+test("giveaway help documents the setup panel, administrator access, automatic grants and month-end behavior",t=>{
+  const f=fixture(t);
+  const help=f.run("help",["giveaway"],S).content;
+  assert.match(help,/Administrator/);assert.match(help,/setup panel/);assert.match(help,/30 days/);assert.match(help,/across month-end/);assert.match(help,/creator cannot win/);
+  const fund=f.run("help",["giveawayfund"],S).content;assert.match(fund,/automatically/);assert.match(fund,/confirmed prizes/);
 });

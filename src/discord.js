@@ -21,7 +21,7 @@ const { lootImage, battleImage } = require("./visual-cards");
 const { collectionCards, collectionPage } = require("./collection-ui");
 const { payloadPages } = require("./payload-safety");
 const { presentLoot } = require("./loot-presentation");
-const { giveawayPayload, discordGiveaways } = require("./giveaway-discord");
+const { giveawayPayload, setupPayload, discordGiveaways } = require("./giveaway-discord");
 const { ProfileService } = require("./profile-service");
 const { RoleRecovery } = require("./role-shop");
 const { roleAPI } = require("./discord-roles");
@@ -167,7 +167,7 @@ function createClient(
       : "⚠️ Something went wrong. Please try again. If it keeps happening, contact a server admin.";
   const logError = (label, error) =>
     console.warn(label, { code: error.code, name: error.name, message: error.message?.slice(0, 300) });
-  const giveaways = discordGiveaways(client, game, logError);
+  const giveaways = discordGiveaways(client, game, logError, { emojis });
   const context = (s, interaction = false) => ({
     userId: (interaction ? s.user : s.author).id,
     displayName:
@@ -271,6 +271,7 @@ function createClient(
       }
     };
     const p = output.presentation;
+    if (p?.kind === "giveaway-setup") { await transport.show(setupPayload(p)); return; }
     if (p?.kind === "giveaway") {
       try {
         const sent = await transport.show(giveawayPayload(p));
@@ -470,7 +471,8 @@ function createClient(
         const rules = game.executeResult("rules", [], context(i, true));
         payload = UI.panel(game, rules.presentation.session);
       }
-      if (i.deferred || i.replied) await i.editReply(payload);
+      if (i.customId?.startsWith("ngs:") && (i.deferred || i.replied)) await i.followUp({ ...payload, flags: 64 });
+      else if (i.deferred || i.replied) await i.editReply(payload);
       else await i.reply({ ...payload, flags: 64 });
     } catch (e) {
       logError("Interaction error response unavailable:", e);
@@ -515,6 +517,7 @@ function createClient(
       return;
     }
     const id = i.customId || "";
+    if (id.startsWith("ngs:")) { await giveaways.setup(i, ctx); return; }
     if (id.startsWith("ng:")) { await giveaways.enter(i, ctx); return; }
     if (id.startsWith("nc:")) {
       const match = /^nc:(\d{5,22}):(\d{5,22}):(weapons|armors):(\d{1,4}):(\d{10})$/.exec(id);

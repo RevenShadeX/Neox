@@ -515,7 +515,7 @@ class Game {
         )
           .safeIntegers(true)
           .get().n;
-        return `${fmt(t.players)} players • ${fmt(t.wallet)} wallet Neo Coins • ${fmt(t.bank)} bank Neo Coins\nTreasury: ${fmt(this.economy.treasury())} • role escrow: ${fmt(held)} • held refunds: ${fmt(refunds)}\nNew coins: daily, monster hunting, global levels, casino winnings and approved server giveaway payouts. No real-world value.`;
+        return `${fmt(t.players)} players • ${fmt(t.wallet)} wallet Neo Coins • ${fmt(t.bank)} bank Neo Coins\nTreasury: ${fmt(this.economy.treasury())} • role escrow: ${fmt(held)} • held refunds: ${fmt(refunds)}\nNew coins: daily, monster hunting, global levels, casino winnings and server giveaway payouts. No real-world value.`;
       }
       case "leaderboard": {
         const mode = a[0] || "wealth";

@@ -112,4 +112,26 @@ async function battleImage(p, playerAvatar, opponentAvatar, { avatarRenderer = a
   return new AttachmentBuilder(await canvas.encode("png"),{name:"neox-battle.png"});
   } finally { active--; }
 }
-module.exports={lootImage,battleImage};
+async function giveawayImage(result, names) {
+  if (active >= 2) throw Error("Giveaway renderer busy");
+  active++;
+  try {
+    if (!names.length || names.length > 20 || names.length !== result.winnerIds.length) throw Error("Invalid giveaway winners");
+    const height = 260 + Math.ceil(names.length / 2) * 78;
+    const canvas = createCanvas(1100, height), c = canvas.getContext("2d");
+    base(c,1100,height,"#c44558");
+    text(c,"NEOX  /  GIVEAWAY WINNERS",55,75,30,"#ffffff",800);
+    text(c,`${result.prize.toLocaleString("en-US")} NEO COINS EACH`,55,128,27,"#f2c78c",800);
+    text(c,`TOTAL PRIZE  ${result.total.toLocaleString("en-US")} NEO COINS`,55,172,21,"#c8a5ad");
+    const art = await namedArtwork("neox_gift");
+    if (art) c.drawImage(art,910,45,110,110);
+    names.forEach((name,i)=>{
+      const x = 55 + (i % 2) * 525, y = 205 + Math.floor(i / 2) * 78;
+      round(c,x,y,470,62,14,"#29131b","#763044");
+      text(c,`${i+1}. ${String(name).slice(0,64)}`,x+18,y+40,24,"#ffffff",700);
+    });
+    text(c,"PRIZES SAVED TO YOUR WALLETS",55,height-30,18,"#c8a5ad");
+    return new AttachmentBuilder(await canvas.encode("png"),{name:"neox-giveaway.png"});
+  } finally { active--; }
+}
+module.exports={lootImage,battleImage,giveawayImage};
