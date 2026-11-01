@@ -1,6 +1,9 @@
 "use strict";
 
 const commands = {
+  ownersmoney: { usage: "[default amount|approve server-id [amount]|set server-id amount|pause server-id|resume server-id|history [server-id]]", description: "Bot-owner-only monthly server giveaway funding controls" },
+  giveawayfund: { description: "Server owner: view the restricted monthly giveaway fund" },
+  giveaway: { usage: "total-coins minutes [winners]|cancel giveaway-id", description: "Server owner: start a random giveaway using the restricted fund" },
   disable: { description: "Disable Neox commands in this channel (channel managers)" },
   enable: { description: "Enable Neox commands in this channel (channel managers)" },
   ping: { description: "Check bot response time and Discord Gateway latency" },
@@ -175,6 +178,7 @@ const commands = {
 };
 // Explicit shortcuts keep parsing predictable; the shared registry rejects collisions.
 const shortcuts = {
+  ownersmoney: "om", giveawayfund: "gf", giveaway: "gw",
   disable: "dis", enable: "ena", ping: "p", rules: "r", agree: "ag", decline: "dec", duel: "dl", help: "he",
   cash: "c", deposit: "dep", withdraw: "wd", pay: "py", weekly: "wk", work: "wo",
   treasury: "trsy", roleshop: "rs", roleshopadmin: "rsa", rolepurchases: "rp",
@@ -192,6 +196,7 @@ for (const [name, shortcut] of Object.entries(shortcuts)) {
   commands[name].aliases = [...new Set([...(commands[name].aliases || []), shortcut])];
 }
 const argumentCounts = {
+  ownersmoney: [0, 3], giveawayfund: [0, 0], giveaway: [2, 3],
   disable: [0, 0],
   enable: [0, 0],
   ping: [0, 0],

@@ -37,7 +37,7 @@ For a 512 MB host, optionally set `NODE_OPTIONS=--max-old-space-size=192` to lea
 
 ## Economy and funding policy
 
-**Daily rewards, monster hunting, global level-up rewards and casino winnings create coins.** Minting is centrally scoped and transaction-guarded. New accounts start with **zero** coins; existing balances are preserved. Daily rolls 1,000–1,500 Neo Coins at global level 1; each extra global level adds 500 to both bounds. It also grants 1–(2 + floor((level−1)/5)) Daily Caches. Claims retain a 24-hour cooldown and use the global level before the claim awards XP. Hunting rewards depend on rarity, with a 20-second cooldown. Global level rewards use the configured curve below.
+**Daily rewards, monster hunting, global level-up rewards, casino winnings and approved server giveaway payouts create coins.** Minting is centrally scoped and transaction-guarded. New accounts start with **zero** coins; existing balances are preserved. Daily rolls 1,000–1,500 Neo Coins at global level 1; each extra global level adds 500 to both bounds. It also grants 1–(2 + floor((level−1)/5)) Daily Caches. Claims retain a 24-hour cooldown and use the global level before the claim awards XP. Hunting rewards depend on rarity, with a 20-second cooldown. Global level rewards use the configured curve below.
 
 Weekly grants 2–4 Gem Caches plus 1–2 uniformly chosen Weapon, Armor or Monster Caches at global level 1. Every five extra global levels raises both Gem Cache bounds and the bonus cache maximum by one. Weekly remains item-only with a seven-day cooldown. Work gives three Companion Rations, quests grant XP, battles/bosses grant progression, and collection milestones grant item caches. Releasing monsters, disposing of equipment and opening loot caches give **no direct currency**. Monster threat/value scores are collection metadata, not redemption prices. `pay` remains a compatibility command that explicitly rejects gifting. Equipment trades transfer existing coins for equipment. Own-wallet bank deposits/withdrawals remain available.
 
@@ -259,3 +259,25 @@ Weapon and armor collections (`n weapons`, `n weps`, `n armors`) use one message
 ### Disable commands in a channel
 
 Use `n disable` (`n dis`) in a channel to make Neox silently ignore prefix commands there. Restore them with `n enable` (`n ena`) in the same channel. Server owners, Administrators, and members with Manage Server or Manage Channels in that channel can toggle it; game-rules acceptance is not required. Slash commands and old buttons/modals show a private disabled notice. Other channels are unaffected; threads are separate channels. The setting persists across restarts in the additive `disabled_channels` table, created automatically when the database opens. Existing player data is unchanged.
+
+
+### Restricted monthly server giveaway funds
+
+Only bot-owner-approved installed servers receive a giveaway allowance (default 1,000,000 Neo Coins per UTC calendar month). Set optional `BOT_OWNER_ID` to your exact Discord user ID, or let Neox discover the Discord application owner (team application: team owner). A server role or Administrator never grants bot-owner control. Without a verified bot-owner identity, management fails closed.
+
+- `n ownersmoney default 1m`: default for future grants.
+- `n ownersmoney approve SERVER_ID [amount]`: approve an installed server and grant the current month once.
+- `n ownersmoney set SERVER_ID 2m`: change that server's future monthly grants.
+- `n ownersmoney pause SERVER_ID` / `resume SERVER_ID`: suspend/resume funding; pausing cancels active giveaways.
+- `n ownersmoney history [SERVER_ID]`: recent funding and payout audit.
+- `n giveawayfund` (`n gf`): current server owner views the restricted fund.
+- `n giveaway 100000 60 2` (`n gw`): reserve 100,000 for 60 minutes, with two random winners of 50,000 each.
+- `n giveaway cancel GIVEAWAY_ID`: current server owner cancels an open giveaway.
+
+Members enter with the button after accepting Neox rules. Owners and bots are excluded; membership and wallet capacity are rechecked at draw time. Participants are shuffled using the existing cryptographic RNG. Prizes are ordinary Neo Coins only after the atomic payout. Allowances cannot be spent in personal wallets, shops, gambling or direct transfers. Monthly allocations are bookkeeping quotas; payouts are audited as new currency under `server giveaways`.
+
+The ready-time recovery loop checks monthly funding once per minute and settles due giveaways every 15 seconds. It grants only the current month to approved installed servers. Past months are not backpaid, unused funds expire, changing allowances never refills an already-issued month, and a remove/rejoin does not duplicate a month's allocation. Giveaways must end in their funding month. Limits: three active per server, 500 entries, 20 winners, 1–10080 minutes. Draws check up to 100 shuffled candidates within a bounded time budget; insufficient eligible winners cancel and refund current-month reservations. Transient Discord failures retry after a lease timeout; failed result messages never repay winners. A stopped bot settles on reconnect, provided its funding month has not expired. Self-awards are blocked; alternate-account collusion cannot be reliably detected.
+
+New giveaway tables are added without changing balances or existing inventory. Live automatic funding and Discord membership checks require a connected bot. Back up your persistent SQLite database before deploying as usual.
+
+Giveaway audit and completed giveaway details are retained for 90 days (audit capped at 100,000 rows). Monthly grant records are retained to prevent duplicate funding.

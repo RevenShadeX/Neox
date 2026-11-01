@@ -1,4 +1,5 @@
 "use strict";
+const { ownerId } = require("./giveaways");
 const path = require("node:path");
 const { validPrefix } = require("./prefix");
 const { open } = require("./database");
@@ -26,6 +27,7 @@ function runtimeConfig(env = process.env, nodeVersion = process.versions.node) {
     throw Error("MAINTENANCE_INTERVAL_SECONDS must be 30–3600.");
   return {
     token: env.DISCORD_TOKEN.trim(),
+    botOwnerId: ownerId(env.BOT_OWNER_ID || ""),
     database: path.resolve(env.DATABASE_PATH || "./data/neox.sqlite"),
     maintenance: seconds * 1000,
     maxBet: readMaxBet(env.MAX_BET || "100000"),
@@ -70,6 +72,7 @@ async function start({
   try {
     store = openStore(config.database);
     const game = makeGame(store, {
+      botOwnerId: config.botOwnerId,
       maxBet: config.maxBet,
       leveling: config.leveling,
     });

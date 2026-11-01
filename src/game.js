@@ -1,5 +1,6 @@
 "use strict";
 const C = require("./content");
+const { Giveaways } = require("./giveaways");
 const { rollClaim } = require("./claim-rewards");
 const { itemIcon, inventoryLabel } = require("./item-display");
 const { validPrefix } = require("./prefix");
@@ -48,6 +49,7 @@ class Game {
     {
       rng = secure,
       clock = Date.now,
+      botOwnerId = process.env.BOT_OWNER_ID || "",
       maxBet = readMaxBet(),
       leveling = readLevelingConfig(),
     } = {},
@@ -60,6 +62,7 @@ class Game {
     this.maxBet = readMaxBet(String(maxBet));
     this.progression = new Progression(this, leveling);
     this.economy = new Economy(this);
+    this.giveaways = new Giveaways(this, botOwnerId);
     this.sessions = new Sessions(this);
     this.roleShop = new RoleShop(this);
     this.duels = new Duels(this);
@@ -330,7 +333,7 @@ class Game {
     );
     if (!["disable", "enable"].includes(name)) this.requireChannelEnabled(ctx);
     return this.request(ctx, (player) => {
-      if (!["disable", "enable", "ping", "help", "rules", "agree", "decline", "refunds"].includes(name))
+      if (!["ownersmoney", "giveawayfund", "disable", "enable", "ping", "help", "rules", "agree", "decline", "refunds"].includes(name))
         this.requireAgreement(player.id);
       if (!["rules", "agree", "decline"].includes(name))
         this.cooldown(player.id, "command", 1000);
@@ -437,6 +440,9 @@ class Game {
           ? this.duels.join(ctx, wager)
           : this.duels.create(ctx, userId(a[0]), wager);
       }
+      case "ownersmoney": return { completed: false, content: this.giveaways.manage(a, ctx) };
+      case "giveawayfund": return { completed: false, content: this.giveaways.fund(ctx) };
+      case "giveaway": return this.giveaways.create(a, ctx);
       case "disable":
       case "enable": {
         assert(ctx.manageGuild || ctx.manageChannels, "Manage Channels or Manage Server permission is required.");
@@ -509,7 +515,7 @@ class Game {
         )
           .safeIntegers(true)
           .get().n;
-        return `${fmt(t.players)} players • ${fmt(t.wallet)} wallet Neo Coins • ${fmt(t.bank)} bank Neo Coins\nTreasury: ${fmt(this.economy.treasury())} • role escrow: ${fmt(held)} • held refunds: ${fmt(refunds)}\nNew coins: daily, monster hunting, global levels and casino winnings. No real-world value.`;
+        return `${fmt(t.players)} players • ${fmt(t.wallet)} wallet Neo Coins • ${fmt(t.bank)} bank Neo Coins\nTreasury: ${fmt(this.economy.treasury())} • role escrow: ${fmt(held)} • held refunds: ${fmt(refunds)}\nNew coins: daily, monster hunting, global levels, casino winnings and approved server giveaway payouts. No real-world value.`;
       }
       case "leaderboard": {
         const mode = a[0] || "wealth";

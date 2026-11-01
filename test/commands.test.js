@@ -20,6 +20,7 @@ function fixture(options = {}) {
   const store = open(":memory:");
   let now = 1800000000000;
   const game = new Game(store, {
+    botOwnerId: A,
     clock: () => now,
     rng: { ...secure, coinflip: () => 1 },
     ...options,
@@ -28,6 +29,7 @@ function fixture(options = {}) {
     userId: A,
     guildId: "55555",
     channelId: "77777",
+    guildOwnerId: A,
     manageGuild: true,
     manageRoles: true,
     memberIds: [A, B],
@@ -121,6 +123,7 @@ for (const [content, canonical] of requestedOther)
     }
   });
 const validArgs = {
+  ownersmoney: [], giveawayfund: [], giveaway: ["100", "1"],
   disable: [], enable: [],
   ping: [],
   sacrifice: ["A001", "1"], repair: ["ALL"], infuse: ["3", "1"], weapons: [], armors: [],
@@ -188,6 +191,7 @@ const validArgs = {
   boss: [],
 };
 function prepare(f, command) {
+  if (["giveaway", "giveawayfund"].includes(command)) f.store.db.transaction(() => f.game.giveaways.manage(["approve", "55555"], { userId: A, installedGuildId: "55555" }))();
   if (command === "roleshop")
     f.store
       .sql("INSERT INTO role_shop_settings(guild,enabled) VALUES(?,1)")

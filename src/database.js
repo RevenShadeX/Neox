@@ -39,6 +39,16 @@ function open(filename = "./data/neox.sqlite") {
  CREATE INDEX IF NOT EXISTS rankings_battle ON players(rating DESC,id);
  CREATE TABLE IF NOT EXISTS battle_stages(user TEXT PRIMARY KEY REFERENCES players(id),stage INTEGER NOT NULL DEFAULT 1 CHECK(stage BETWEEN 1 AND 1000000000));
  CREATE TABLE IF NOT EXISTS guilds(id TEXT PRIMARY KEY,prefix TEXT NOT NULL);
+ CREATE TABLE IF NOT EXISTS giveaway_settings(id INTEGER PRIMARY KEY CHECK(id=1),amount INTEGER NOT NULL CHECK(amount BETWEEN 1 AND 1000000000000));
+ INSERT OR IGNORE INTO giveaway_settings(id,amount) VALUES(1,1000000);
+ CREATE TABLE IF NOT EXISTS giveaway_servers(guild TEXT PRIMARY KEY,approved INTEGER NOT NULL CHECK(approved IN(0,1)),amount INTEGER CHECK(amount BETWEEN 1 AND 1000000000000));
+ CREATE TABLE IF NOT EXISTS giveaway_funds(guild TEXT NOT NULL,month TEXT NOT NULL,allowance INTEGER NOT NULL CHECK(allowance BETWEEN 1 AND 1000000000000),available INTEGER NOT NULL CHECK(available BETWEEN 0 AND allowance),PRIMARY KEY(guild,month));
+ CREATE TABLE IF NOT EXISTS server_giveaways(id TEXT PRIMARY KEY,guild TEXT NOT NULL,channel TEXT NOT NULL,owner TEXT NOT NULL,month TEXT NOT NULL,total INTEGER NOT NULL CHECK(total BETWEEN 1 AND 1000000000000),winners INTEGER NOT NULL CHECK(winners BETWEEN 1 AND 20),ends INTEGER NOT NULL,status TEXT NOT NULL CHECK(status IN('open','drawing','paid','cancelled')),message TEXT,lease TEXT,lease_until INTEGER NOT NULL DEFAULT 0,reason TEXT);
+ CREATE INDEX IF NOT EXISTS giveaway_due ON server_giveaways(status,ends,lease_until);
+ CREATE TABLE IF NOT EXISTS giveaway_entries(giveaway TEXT NOT NULL REFERENCES server_giveaways(id),user TEXT NOT NULL REFERENCES players(id),PRIMARY KEY(giveaway,user));
+ CREATE TABLE IF NOT EXISTS giveaway_winners(giveaway TEXT NOT NULL REFERENCES server_giveaways(id),user TEXT NOT NULL REFERENCES players(id),amount INTEGER NOT NULL CHECK(amount BETWEEN 1 AND 1000000000000),PRIMARY KEY(giveaway,user));
+ CREATE TABLE IF NOT EXISTS giveaway_audit(id INTEGER PRIMARY KEY AUTOINCREMENT,guild TEXT NOT NULL,action TEXT NOT NULL,amount INTEGER NOT NULL,reference TEXT NOT NULL,at INTEGER NOT NULL);
+ CREATE INDEX IF NOT EXISTS giveaway_audit_guild ON giveaway_audit(guild,id DESC);
  CREATE TABLE IF NOT EXISTS disabled_channels(guild TEXT NOT NULL,channel TEXT NOT NULL,PRIMARY KEY(guild,channel));
  CREATE TABLE IF NOT EXISTS inventory(user TEXT NOT NULL REFERENCES players(id),kind TEXT NOT NULL,item TEXT NOT NULL,
  qty INTEGER NOT NULL CHECK(typeof(qty)='integer' AND qty BETWEEN 0 AND 1000000),PRIMARY KEY(user,kind,item));
@@ -106,6 +116,12 @@ function open(filename = "./data/neox.sqlite") {
         sql(
           "DELETE FROM role_purchases WHERE status IN('delivered','refunded') AND updated<?",
         ).run(now - 90 * 86400000);
+        for (const table of ["giveaway_entries", "giveaway_winners"]) {
+          sql(`DELETE FROM ${table} WHERE giveaway IN (SELECT id FROM server_giveaways WHERE status IN('paid','cancelled') AND ends<?)`).run(now - 90 * 86400000);
+        }
+        sql("DELETE FROM server_giveaways WHERE status IN('paid','cancelled') AND ends<?").run(now - 90 * 86400000);
+        sql("DELETE FROM giveaway_audit WHERE at<?").run(now - 90 * 86400000);
+        db.exec("DELETE FROM giveaway_audit WHERE id<=(SELECT COALESCE(MAX(id),0)-100000 FROM giveaway_audit)");
         for (const table of ["economy_events", "wager_history"]) {
           sql(`DELETE FROM ${table} WHERE at<?`).run(now - 30 * 86400000);
           db.exec(

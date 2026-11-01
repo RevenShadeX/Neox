@@ -21,6 +21,7 @@ const { lootImage, battleImage } = require("./visual-cards");
 const { collectionCards, collectionPage } = require("./collection-ui");
 const { payloadPages } = require("./payload-safety");
 const { presentLoot } = require("./loot-presentation");
+const { giveawayPayload, discordGiveaways } = require("./giveaway-discord");
 const { ProfileService } = require("./profile-service");
 const { RoleRecovery } = require("./role-shop");
 const { roleAPI } = require("./discord-roles");
@@ -145,14 +146,17 @@ function createClient(
   const profileService = new ProfileService(client, profiles),
     api = roles || roleAPI(client),
     recovery = new RoleRecovery(game, api);
-  let timer;
+  let timer, stopped = false;
   const roleChecks = new Set();
   const originalDestroy = client.destroy.bind(client);
   client.neoxStop = async () => {
+    stopped = true;
     clearInterval(timer);
     await recovery.stop();
+    await giveaways.recovery.stop();
   };
   client.destroy = () => {
+    stopped = true;
     clearInterval(timer);
     return originalDestroy();
   };
@@ -163,6 +167,7 @@ function createClient(
       : "⚠️ Something went wrong. Please try again. If it keeps happening, contact a server admin.";
   const logError = (label, error) =>
     console.warn(label, { code: error.code, name: error.name, message: error.message?.slice(0, 300) });
+  const giveaways = discordGiveaways(client, game, logError);
   const context = (s, interaction = false) => ({
     userId: (interaction ? s.user : s.author).id,
     displayName:
@@ -171,6 +176,7 @@ function createClient(
       (interaction ? s.user : s.author).globalName ||
       (interaction ? s.user : s.author).username,
     guildId: s.guildId,
+    guildOwnerId: s.guild?.ownerId,
     channelId: s.channelId || s.channel?.id,
     manageChannels: canManageChannel(s, interaction),
     ...serverPermissions(s, interaction),
@@ -265,6 +271,16 @@ function createClient(
       }
     };
     const p = output.presentation;
+    if (p?.kind === "giveaway") {
+      try {
+        const sent = await transport.show(giveawayPayload(p));
+        if (sent?.id) game.sql("UPDATE server_giveaways SET message=? WHERE id=? AND status='open'").run(sent.id, p.id);
+      } catch (error) {
+        game.db.transaction(() => game.giveaways.cancel(p.id, "publication failed")).immediate();
+        throw error;
+      }
+      return;
+    }
     if (p?.kind === "ping") {
       const started = performance.now();
       const sent = await transport.show({ content: "🏓 Checking connection…", allowedMentions: UI.allowedMentions });
@@ -419,6 +435,7 @@ function createClient(
         game.requireAgreement(ctx.userId);
         await enrichDuel(message, parsed.args, ctx);
       }
+      await giveaways.enrich(name, parsed.args, message, ctx);
       output = execute(name, parsed.args, ctx);
     } catch (e) {
       if (e.code === "RULES_REQUIRED") output = execute("rules", [], ctx);
@@ -474,7 +491,7 @@ function createClient(
     }
     if (isCommand) {
       if (!registry.resolve(i.commandName)) return;
-      await i.deferReply();
+      await i.deferReply(i.commandName === "ownersmoney" ? { flags: 64 } : undefined);
       const args = parseArguments(i.options.getString("args")),
         name = registry.resolve(i.commandName);
       let output;
@@ -483,6 +500,7 @@ function createClient(
           game.requireAgreement(ctx.userId);
           await enrichDuel(i, args, ctx);
         }
+        await giveaways.enrich(name, args, i, ctx);
         output = execute(name, args, ctx);
       } catch (e) {
         if (e.code === "RULES_REQUIRED") output = execute("rules", [], ctx);
@@ -497,6 +515,7 @@ function createClient(
       return;
     }
     const id = i.customId || "";
+    if (id.startsWith("ng:")) { await giveaways.enter(i, ctx); return; }
     if (id.startsWith("nc:")) {
       const match = /^nc:(\d{5,22}):(\d{5,22}):(weapons|armors):(\d{1,4}):(\d{10})$/.exec(id);
       if (!i.isButton?.() || !match) throw new GameError("Invalid collection control. Open weapons or armors again.");
@@ -619,13 +638,17 @@ function createClient(
   client.on(Events.InteractionCreate, (i) => {
     interactionHandler(i).catch((e) => failure(i, e));
   });
-  client.once(Events.ClientReady, () => {
+  client.once(Events.ClientReady, async () => {
+    try { await giveaways.identifyOwner(); } catch (e) { logError("Bot owner discovery unavailable:", e); }
+    if (stopped) return;
     console.log(
       `Neox online as ${client.user.tag}; ${Object.keys(commands).length} commands. Neo Coins: virtual only.`,
     );
     const tick = () => {
-      if (client.isReady())
+      if (client.isReady()) {
         recovery.recover().catch((e) => logError("Role recovery failed:", e));
+        giveaways.recovery.recover().catch((e) => logError("Giveaway recovery failed:", e));
+      }
     };
     tick();
     timer = setInterval(tick, 15000);
