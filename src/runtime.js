@@ -93,7 +93,17 @@ async function start({
       process.once("SIGINT", onSignal);
       process.once("SIGTERM", onSignal);
     }
-    await client.login(config.token);
+    logger.log("Neox connecting to Discord gateway...");
+    const loginWatchdog = setTimeout(() => {
+      logger.error("Neox Discord login is still pending after 30 seconds. Check outbound connectivity, Discord gateway availability, and token configuration.");
+    }, 30000);
+    loginWatchdog.unref?.();
+    try {
+      await client.login(config.token);
+      logger.log("Neox Discord login completed.");
+    } finally {
+      clearTimeout(loginWatchdog);
+    }
     return { client, game, shutdown };
   } catch (error) {
     await shutdown();
