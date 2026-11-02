@@ -37,9 +37,9 @@ Discord connectivity needs `discord.com`, `gateway.discord.gg` and assigned/resu
 
 The `prebuild-install` deprecation warning is informational. If the log reaches `Neox starting`, native dependencies and the SQLite startup path have already loaded. Dependency rebuild approval does not authorize outbound network connections.
 
-Startup checks the public Discord API through the same Discord.js REST transport used for login, with a ten-second deadline, then gives login up to 90 seconds. A stalled connection now fails, checkpoints/closes SQLite and exits nonzero so the hosting restart policy can act. Logs distinguish REST discovery/authentication from Gateway WebSocket identification. Public API reachability alone does not verify the token or WebSocket route.
+Startup calls Discord.js login directly, using its normal connection and retry behavior. There is no extra public API preflight and no application-imposed login deadline. Slow connections are not stopped by an additional startup check. Connection-stage and Gateway error logs remain available; genuine login failures still close SQLite and exit nonzero.
 
-- API connectivity errors: the host must resolve and reach `discord.com` over outbound HTTPS/443. Check host firewall and egress/proxy configuration. Setting an inbound web port will not fix this bot.
+- REST connectivity errors: the host must resolve and reach `discord.com` over outbound HTTPS/443. Check host firewall and egress/proxy configuration. Setting an inbound web port will not fix this bot.
 - Discovery succeeds but WebSocket login stalls: allow long-lived outbound WSS/443 to `gateway.discord.gg` and Discord's assigned/resume hosts. Ask hosting support to check the WebSocket route and DNS if necessary.
 - Gateway code **4004** / token rejection: configure a valid Discord **bot** token privately. Never paste it into chat or logs. Do not use a proxy placeholder as the token.
 - Gateway code **4014**: enable **Message Content Intent** in Discord Developer Portal → application → Bot → Privileged Gateway Intents. Code **4013** indicates invalid intents.

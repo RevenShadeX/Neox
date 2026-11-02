@@ -1,17 +1,6 @@
 "use strict";
 const { Events } = require("discord.js");
 
-async function withDeadline(operation, milliseconds, code, message) {
-  let timer;
-  try {
-    return await Promise.race([
-      Promise.resolve().then(operation),
-      new Promise((_, reject) => {
-        timer = setTimeout(() => reject(Object.assign(new Error(message), { code })), milliseconds);
-      }),
-    ]);
-  } finally { clearTimeout(timer); }
-}
 function connectionFailure(error) {
   // Never include request headers, URLs, raw debug messages or token fragments.
   const candidate = error?.cause?.code || error?.code || error?.name;
@@ -48,4 +37,4 @@ function observeLogin(client, logger) {
     for (const [event, listener] of listeners) client.off?.(event, listener);
   } };
 }
-module.exports = { withDeadline, connectionFailure, observeLogin };
+module.exports = { connectionFailure, observeLogin };

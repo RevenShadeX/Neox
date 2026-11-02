@@ -1,5 +1,5 @@
 "use strict";
-const { withDeadline, connectionFailure, observeLogin } = require("./startup");
+const { connectionFailure, observeLogin } = require("./startup");
 const { ownerId } = require("./giveaways");
 const path = require("node:path");
 const { validPrefix } = require("./prefix");
@@ -42,8 +42,6 @@ async function start({
   makeClient = createClient,
   logger = console,
   handleSignals = true,
-  loginTimeoutMs = 90000,
-  probeTimeoutMs = 10000,
 } = {}) {
   const config = runtimeConfig(env);
   let store, client, timer, stopping, diagnostics;
@@ -98,32 +96,15 @@ async function start({
       process.once("SIGTERM", onSignal);
     }
     diagnostics = observeLogin(client, logger);
-    if (client.rest?.get) {
-      logger.log("Neox checking Discord API using the Discord.js REST connection...");
-      try {
-        await withDeadline(() => client.rest.get("/gateway", { auth: false, signal: AbortSignal.timeout(probeTimeoutMs) }), probeTimeoutMs,
-          "DISCORD_API_TIMEOUT", "Discord API did not respond before the startup deadline.");
-        logger.log("Discord public API reachable. This does not yet verify the token or Gateway WebSocket.");
-      } catch (error) {
-        logger.error("Discord API connectivity failed:", connectionFailure(error),
-          "Allow outbound HTTPS to discord.com on port 443. Check host DNS, firewall and proxy support; a web port is not required.");
-        throw error;
-      }
-    }
     logger.log("Neox connecting to Discord gateway...");
-    const loginWatchdog = setTimeout(() => {
-      logger.error(`Neox Discord login still pending: ${diagnostics.stage()}. Startup will stop after ${loginTimeoutMs / 1000} seconds if no connection is established.`);
-    }, Math.min(30000, loginTimeoutMs));
     try {
-      await withDeadline(() => client.login(config.token), loginTimeoutMs, "DISCORD_LOGIN_TIMEOUT",
-        "Discord login timed out. Check outbound HTTPS to discord.com, WSS to gateway.discord.gg, the bot token and Message Content Intent.");
+      await client.login(config.token);
       logger.log("Neox Discord login completed.");
     } catch (error) {
       logger.error("Discord login failed:", connectionFailure(error), `Stage: ${diagnostics.stage()}.`,
         "Check host outbound HTTPS/WSS, the bot token and Message Content Intent. HTTPS_PROXY alone does not configure Discord.js REST or its WebSocket transport.");
       throw error;
     } finally {
-      clearTimeout(loginWatchdog);
       diagnostics.stop();
     }
     return { client, game, shutdown };

@@ -5,7 +5,7 @@ const { EventEmitter } = require("node:events");
 const { Events } = require("discord.js");
 const { open } = require("../src/database");
 const { start } = require("../src/runtime");
-const { withDeadline, observeLogin, connectionFailure } = require("../src/startup");
+const { observeLogin, connectionFailure } = require("../src/startup");
 function fixture(t, client) {
   const store = open(":memory:"), logs = [], order = [];
   t.after(() => { if (store.db.open) store.close(); });
@@ -15,43 +15,39 @@ function fixture(t, client) {
     env: { DISCORD_TOKEN: "private-test-token" }, openStore: () => store,
     makeClient: () => client, handleSignals: false,
     logger: { log: (...v) => logs.push(v.join(" ")), error: (...v) => logs.push(v.join(" ")) },
-    loginTimeoutMs: 30, probeTimeoutMs: 30,
   } };
 }
-test("stalled Discord login reaches a deadline, destroys the client and closes SQLite", async t => {
-  const f = fixture(t, { login: () => new Promise(() => {}) });
-  await assert.rejects(start(f.options), { code: "DISCORD_LOGIN_TIMEOUT" });
-  assert.equal(f.store.db.open, false);
-  assert.deepEqual(f.order, ["recovery stopped", "client destroyed"]);
-  assert.ok(f.logs.some(line => line.includes("Stage: Discord REST")));
-  assert.ok(!f.logs.join().includes("private-test-token"));
-});
-test("public probe uses the client's Discord.js transport without authentication", async t => {
-  let logins = 0, probes = 0;
-  const client = { rest: { get: async (route, options) => {
-    probes++;
-    assert.equal(route, "/gateway");assert.equal(options.auth, false);
-    assert.ok(options.signal instanceof AbortSignal);
-    return { url: "wss://gateway.discord.gg" };
-  } }, login: async () => { logins++; } };
+test("startup logs in directly without calling a public API preflight", async t => {
+  let logins = 0;
+  const client = {
+    rest: { get: async () => { assert.fail("Startup must not require an extra API probe"); } },
+    login: async token => { assert.equal(token,"private-test-token"); logins++; },
+  };
   const f = fixture(t, client), app = await start(f.options);
-  assert.equal(probes, 1);assert.equal(logins, 1);
-  assert.ok(f.logs.some(line => line.includes("does not yet verify the token")));
-  await app.shutdown();assert.equal(f.store.db.open, false);
+  assert.equal(logins,1);assert.equal(f.store.db.open,true);
+  assert.ok(!f.logs.join().includes("private-test-token"));
+  await app.shutdown();assert.equal(f.store.db.open,false);
+  assert.deepEqual(f.order,["recovery stopped","client destroyed"]);
 });
-test("failed public API connectivity stops before login and closes the database", async t => {
-  let logins = 0;
-  const f = fixture(t, { rest: { get: async () => { throw Object.assign(new Error("sensitive request detail"), { code: "ECONNREFUSED" }); } }, login: async () => { logins++; } });
-  await assert.rejects(start(f.options), { code: "ECONNREFUSED" });
-  assert.equal(logins, 0);assert.equal(f.store.db.open, false);
-  assert.ok(f.logs.some(line => line.includes("ECONNREFUSED")));
-  assert.ok(!f.logs.join().includes("sensitive request detail"));
+test("pending Discord login stays open until Discord.js completes it", async t => {
+  let complete, attempted;
+  const called = new Promise(resolve => { attempted = resolve; });
+  const f = fixture(t,{login:()=>{attempted();return new Promise(resolve=>{complete=resolve;});}});
+  const starting = start(f.options);
+  await called;
+  await new Promise(resolve=>setTimeout(resolve,40));
+  assert.equal(f.store.db.open,true);assert.deepEqual(f.order,[]);
+  complete();const app=await starting;
+  assert.ok(f.logs.some(line=>line.includes("login completed")));
+  await app.shutdown();assert.equal(f.store.db.open,false);
 });
-test("a stalled API probe cannot hang startup even if its transport ignores abort", async t => {
-  let logins = 0;
-  const f = fixture(t, { rest: { get: () => new Promise(() => {}) }, login: async () => { logins++; } });
-  await assert.rejects(start(f.options), { code: "DISCORD_API_TIMEOUT" });
-  assert.equal(logins, 0);assert.equal(f.store.db.open, false);
+test("genuine Discord login errors still close SQLite and clean up the client", async t => {
+  const f=fixture(t,{login:async()=>{throw Object.assign(new Error("sensitive detail"),{code:"TokenInvalid"});}});
+  await assert.rejects(start(f.options),{code:"TokenInvalid"});
+  assert.equal(f.store.db.open,false);
+  assert.deepEqual(f.order,["recovery stopped","client destroyed"]);
+  assert.ok(f.logs.some(line=>line.includes("TokenInvalid")));
+  assert.ok(!f.logs.join().includes("sensitive detail"));
 });
 test("Gateway authentication and intent errors are actionable without echoing debug secrets", () => {
   const client = new EventEmitter(), logs = [];
@@ -70,9 +66,7 @@ test("Gateway authentication and intent errors are actionable without echoing de
   assert.ok(!logs.join().includes("secret"));
   monitor.stop();assert.equal(client.eventNames().length, 0);
 });
-test("deadline clears after success or rejection and classifies nested network errors safely", async () => {
-  assert.equal(await withDeadline(async () => "ready", 1000, "TIMEOUT", "timeout"), "ready");
-  await assert.rejects(withDeadline(async () => { throw Error("rejected"); }, 1000, "TIMEOUT", "timeout"), /rejected/);
+test("nested connection failures are classified without exposing private values", () => {
   assert.equal(connectionFailure({ cause: { code: "ENOTFOUND" } }), "ENOTFOUND");
   assert.equal(connectionFailure({ code: "unsafe private value", status: 403 }), "UNKNOWN HTTP 403");
 });
