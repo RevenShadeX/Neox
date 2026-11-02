@@ -93,6 +93,16 @@ async function start({
       process.once("SIGINT", onSignal);
       process.once("SIGTERM", onSignal);
     }
+    logger.log("Neox checking Discord API connectivity...");
+    try {
+      const response = await fetch("https://discord.com/api/v10/gateway", {
+        signal: AbortSignal.timeout(10000),
+      });
+      logger.log(`Discord API connectivity: HTTP ${response.status}`);
+      if (!response.ok) logger.error(`Discord API returned HTTP ${response.status}; gateway login may fail.`);
+    } catch (error) {
+      logger.error("Discord API connectivity failed:", error.message, "cause:", error.cause?.code || error.cause?.message || "unknown");
+    }
     logger.log("Neox connecting to Discord gateway...");
     const loginWatchdog = setTimeout(() => {
       logger.error("Neox Discord login is still pending after 30 seconds. Check outbound connectivity, Discord gateway availability, and token configuration.");
