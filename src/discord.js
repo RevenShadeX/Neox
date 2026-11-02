@@ -641,12 +641,13 @@ function createClient(
   client.on(Events.InteractionCreate, (i) => {
     interactionHandler(i).catch((e) => failure(i, e));
   });
-  client.once(Events.ClientReady, async () => {
-    try { await giveaways.identifyOwner(); } catch (e) { logError("Bot owner discovery unavailable:", e); }
+  client.once(Events.ClientReady, () => {
     if (stopped) return;
     console.log(
       `Neox online as ${client.user.tag}; ${Object.keys(commands).length} commands. Neo Coins: virtual only.`,
     );
+    Promise.resolve().then(() => giveaways.identifyOwner())
+      .catch((e) => logError("Bot owner discovery unavailable:", e));
     const tick = () => {
       if (client.isReady()) {
         recovery.recover().catch((e) => logError("Role recovery failed:", e));
