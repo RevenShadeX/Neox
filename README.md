@@ -33,6 +33,19 @@ Never commit `.env`, tokens, credentials, databases, sidecars, backups or `node_
 
 Discord connectivity needs `discord.com`, `gateway.discord.gg` and assigned/resume `*.discord.gg` hosts. Avatars need `cdn.discordapp.com` / `media.discordapp.net`. Avatar requests honor HTTPS/HTTP proxy configuration and normal CA verification; Discord's Gateway also needs a supported long-lived WSS route. This cloud workspace's earlier avatar request received proxy CONNECT 403; local tests use mocks or local images. Live Discord/Wispbyte behavior requires your own token, server permissions and allowed network route. No live deployment is claimed by offline validation.
 
+### If startup stops at Discord login
+
+The `prebuild-install` deprecation warning is informational. If the log reaches `Neox starting`, native dependencies and the SQLite startup path have already loaded. Dependency rebuild approval does not authorize outbound network connections.
+
+Startup checks the public Discord API through the same Discord.js REST transport used for login, with a ten-second deadline, then gives login up to 90 seconds. A stalled connection now fails, checkpoints/closes SQLite and exits nonzero so the hosting restart policy can act. Logs distinguish REST discovery/authentication from Gateway WebSocket identification. Public API reachability alone does not verify the token or WebSocket route.
+
+- API connectivity errors: the host must resolve and reach `discord.com` over outbound HTTPS/443. Check host firewall and egress/proxy configuration. Setting an inbound web port will not fix this bot.
+- Discovery succeeds but WebSocket login stalls: allow long-lived outbound WSS/443 to `gateway.discord.gg` and Discord's assigned/resume hosts. Ask hosting support to check the WebSocket route and DNS if necessary.
+- Gateway code **4004** / token rejection: configure a valid Discord **bot** token privately. Never paste it into chat or logs. Do not use a proxy placeholder as the token.
+- Gateway code **4014**: enable **Message Content Intent** in Discord Developer Portal → application → Bot → Privileged Gateway Intents. Code **4013** indicates invalid intents.
+
+Discord.js REST and its Gateway WebSocket do not automatically use the avatar downloader's proxy dispatcher. Merely setting `HTTPS_PROXY` does not configure those transports. A proxy-only host needs explicit support for both HTTPS and WSS; do not disable TLS verification or bypass managed network policy. This workspace cannot establish your hosting provider's connectivity or validate your private token. When requesting support, share the API probe result, connection stage and numeric/error codes, without credentials.
+
 For a 512 MB host, optionally set `NODE_OPTIONS=--max-old-space-size=192` to leave space for native images and SQLite. Monitor actual host memory/quota; synthetic benchmarks do not guarantee production throughput. `npm run storage` is read-only and warns at 70% of a 1 GiB budget; it never deletes user data.
 
 ## Economy and funding policy
