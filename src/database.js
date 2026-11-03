@@ -47,6 +47,10 @@ function open(filename = "./data/neox.sqlite") {
  CREATE INDEX IF NOT EXISTS giveaway_due ON server_giveaways(status,ends,lease_until);
  CREATE TABLE IF NOT EXISTS giveaway_entries(giveaway TEXT NOT NULL REFERENCES server_giveaways(id),user TEXT NOT NULL REFERENCES players(id),PRIMARY KEY(giveaway,user));
  CREATE TABLE IF NOT EXISTS giveaway_winners(giveaway TEXT NOT NULL REFERENCES server_giveaways(id),user TEXT NOT NULL REFERENCES players(id),amount INTEGER NOT NULL CHECK(amount BETWEEN 1 AND 1000000000000),PRIMARY KEY(giveaway,user));
+ CREATE TABLE IF NOT EXISTS giveaway_payments(giveaway TEXT NOT NULL REFERENCES server_giveaways(id),user TEXT NOT NULL REFERENCES players(id),remaining INTEGER NOT NULL CHECK(remaining BETWEEN 1 AND 1000000000000),PRIMARY KEY(giveaway,user));
+ CREATE TABLE IF NOT EXISTS giveaway_announcements(giveaway TEXT PRIMARY KEY REFERENCES server_giveaways(id),next_attempt INTEGER NOT NULL DEFAULT 0,lease TEXT,lease_until INTEGER NOT NULL DEFAULT 0,delivered INTEGER NOT NULL DEFAULT 0 CHECK(delivered IN(0,1)));
+ CREATE INDEX IF NOT EXISTS giveaway_announcement_due ON giveaway_announcements(delivered,next_attempt,lease_until);
+ CREATE INDEX IF NOT EXISTS giveaway_payment_user ON giveaway_payments(user);
  CREATE TABLE IF NOT EXISTS giveaway_audit(id INTEGER PRIMARY KEY AUTOINCREMENT,guild TEXT NOT NULL,action TEXT NOT NULL,amount INTEGER NOT NULL,reference TEXT NOT NULL,at INTEGER NOT NULL);
  CREATE INDEX IF NOT EXISTS giveaway_audit_guild ON giveaway_audit(guild,id DESC);
  CREATE TABLE IF NOT EXISTS disabled_channels(guild TEXT NOT NULL,channel TEXT NOT NULL,PRIMARY KEY(guild,channel));
@@ -117,9 +121,10 @@ function open(filename = "./data/neox.sqlite") {
           "DELETE FROM role_purchases WHERE status IN('delivered','refunded') AND updated<?",
         ).run(now - 90 * 86400000);
         for (const table of ["giveaway_entries", "giveaway_winners"]) {
-          sql(`DELETE FROM ${table} WHERE giveaway IN (SELECT id FROM server_giveaways WHERE status IN('paid','cancelled') AND ends<?)`).run(now - 90 * 86400000);
+          sql(`DELETE FROM ${table} WHERE giveaway IN (SELECT id FROM server_giveaways WHERE status IN('paid','cancelled') AND ends<? AND NOT EXISTS(SELECT 1 FROM giveaway_payments WHERE giveaway=server_giveaways.id) AND NOT EXISTS(SELECT 1 FROM giveaway_announcements WHERE giveaway=server_giveaways.id AND delivered=0))`).run(now - 90 * 86400000);
         }
-        sql("DELETE FROM server_giveaways WHERE status IN('paid','cancelled') AND ends<?").run(now - 90 * 86400000);
+        sql("DELETE FROM giveaway_announcements WHERE delivered=1 AND giveaway IN(SELECT id FROM server_giveaways WHERE ends<?) AND NOT EXISTS(SELECT 1 FROM giveaway_payments WHERE giveaway=giveaway_announcements.giveaway)").run(now - 90 * 86400000);
+        sql("DELETE FROM server_giveaways WHERE status IN('paid','cancelled') AND ends<? AND NOT EXISTS(SELECT 1 FROM giveaway_payments WHERE giveaway=server_giveaways.id) AND NOT EXISTS(SELECT 1 FROM giveaway_announcements WHERE giveaway=server_giveaways.id)").run(now - 90 * 86400000);
         sql("DELETE FROM giveaway_audit WHERE at<?").run(now - 90 * 86400000);
         db.exec("DELETE FROM giveaway_audit WHERE id<=(SELECT COALESCE(MAX(id),0)-100000 FROM giveaway_audit)");
         for (const table of ["economy_events", "wager_history"]) {

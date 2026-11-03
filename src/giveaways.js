@@ -118,9 +118,7 @@ class Giveaways {
     if (action === "resume") {
       assert(ctx.installedGuildId === guild, "The bot must be installed in that server before resuming.");
       this.grant(guild);
-    } else {
-      for (const row of g.sql("SELECT id FROM server_giveaways WHERE guild=? AND status IN('open','drawing')").all(guild)) this.cancel(row.id, "funding paused");
-    }
+    } // Pausing future funding must not revoke prizes already reserved.
     this.audit(guild, action, 0, ctx.userId);
     return `Giveaway funding ${action === "resume" ? "resumed" : "paused"} for ${guild}.`;
   }
@@ -184,7 +182,6 @@ class Giveaways {
     assert(ctx.memberVerified === true && ctx.userIsBot === false, "Only verified, non-bot server members can enter.");
     assert(ctx.userId !== row.owner, "The giveaway creator cannot enter their giveaway.");
     g.requireAgreement(ctx.userId);
-    assert(g.player(ctx.userId).wallet <= MAX - row.total / row.winners, "Your wallet has no room for this prize.");
     const existing = g.sql("SELECT 1 FROM giveaway_entries WHERE giveaway=? AND user=?").get(token, ctx.userId);
     if (existing) return "You are already entered.";
     assert(g.sql("SELECT COUNT(*) AS n FROM giveaway_entries WHERE giveaway=?").get(token).n < 500, "This giveaway has reached 500 entries.");
@@ -210,26 +207,51 @@ class Giveaways {
       return { ...row, lease };
     }).immediate();
   }
-  finish(row, winners, currentOwner) {
+  finish(row, winners) {
     const g = this.game;
     return g.db.transaction(() => {
       const live = g.sql("SELECT * FROM server_giveaways WHERE id=?").get(row.id);
       if (!live || live.status !== "drawing" || live.lease !== row.lease) return null;
       const prize = live.total / live.winners;
-      const valid = winners.length === live.winners && new Set(winners).size === winners.length && currentOwner && winners.every(user =>
+      const entries = g.sql("SELECT COUNT(*) AS n FROM giveaway_entries WHERE giveaway=?").get(live.id).n;
+      const valid = winners.length === Math.min(live.winners, entries) && new Set(winners).size === winners.length && winners.every(user =>
         user !== live.owner && g.sql("SELECT 1 FROM giveaway_entries WHERE giveaway=? AND user=?").get(live.id, user)
-        && g.sql("SELECT 1 FROM agreements WHERE user=?").get(user) && g.player(user).wallet <= MAX - prize);
-      if (!g.sql("SELECT approved FROM giveaway_servers WHERE guild=?").get(live.guild)?.approved || !valid) {
-        this.cancel(live.id, "paused or insufficient eligible winners"); return { ...live, status: "cancelled", reason: "Paused or insufficient eligible winners. No payout." };
+      );
+      // Entry already verified rules, membership and non-bot status. Never
+      // revoke it because the player later leaves or Discord is unavailable.
+      assert(valid, "Invalid giveaway winner selection.");
+      if (!winners.length) {
+        this.cancel(live.id, "no entries");
+        g.sql("INSERT OR IGNORE INTO giveaway_announcements(giveaway) VALUES(?)").run(live.id);
+        return { ...live, status: "cancelled", reason: "no entries" };
       }
       for (const user of winners) {
-        g.economy.adjust(user, prize, `giveaway ${live.id}`);
+        const credit = Math.min(prize, MAX - g.player(user).wallet);
+        if (credit) g.economy.adjust(user, credit, `giveaway ${live.id}`);
+        if (credit < prize) g.sql("INSERT INTO giveaway_payments(giveaway,user,remaining) VALUES(?,?,?)").run(live.id, user, prize - credit);
         g.sql("INSERT INTO giveaway_winners(giveaway,user,amount) VALUES(?,?,?)").run(live.id, user, prize);
       }
-      g.sql("INSERT INTO economy_events(kind,amount,source,at) VALUES('mint',?,'server giveaways',?)").run(live.total, g.clock());
+      const total = prize * winners.length, unused = live.total - total;
+      if (unused && live.month === period(g.clock()).month) g.sql("UPDATE giveaway_funds SET available=available+? WHERE guild=? AND month=?").run(unused, live.guild, live.month);
+      if (unused) this.audit(live.guild, "unused reservation", unused, live.id);
+      g.sql("INSERT INTO economy_events(kind,amount,source,at) VALUES('mint',?,'server giveaways',?)").run(total, g.clock());
       g.sql("UPDATE server_giveaways SET status='paid',lease=NULL,lease_until=0 WHERE id=?").run(live.id);
-      this.audit(live.guild, "paid", live.total, `${live.id}: ${winners.join(",")}`);
-      return { ...live, status: "paid", winnerIds: winners, prize };
+      g.sql("INSERT INTO giveaway_announcements(giveaway) VALUES(?)").run(live.id);
+      this.audit(live.guild, "paid", total, `${live.id}: ${winners.join(",")}`);
+      return { ...live, total, status: "paid", winnerIds: winners, prize };
+    }).immediate();
+  }
+  releasePayments() {
+    const g = this.game;
+    g.db.transaction(() => {
+      const pending = g.sql("SELECT p.* FROM giveaway_payments p JOIN players u ON u.id=p.user WHERE u.wallet<? ORDER BY p.giveaway,p.user LIMIT 100").all(MAX);
+      for (const p of pending) {
+        const credit = Math.min(p.remaining, MAX - g.player(p.user).wallet);
+        if (!credit) continue;
+        g.economy.adjust(p.user, credit, `giveaway ${p.giveaway} held prize`);
+        if (credit === p.remaining) g.sql("DELETE FROM giveaway_payments WHERE giveaway=? AND user=?").run(p.giveaway, p.user);
+        else g.sql("UPDATE giveaway_payments SET remaining=remaining-? WHERE giveaway=? AND user=?").run(credit, p.giveaway, p.user);
+      }
     }).immediate();
   }
 }
@@ -239,30 +261,41 @@ class GiveawayRecovery {
   async stop() { if (this.running) await this.running; }
   async run() {
     const s = this.service, g = s.game, installed = this.api.guildIds();
+    s.releasePayments();
     if (g.clock() >= this.nextGrantAt) { s.reconcile(installed); this.nextGrantAt = g.clock() + 60000; }
     const due = g.sql("SELECT id FROM server_giveaways WHERE (status='open' AND ends<=?) OR (status='drawing' AND lease_until<=?) ORDER BY ends LIMIT 5").all(g.clock(), g.clock());
     for (const { id: token } of due) {
       const row = s.claim(token); if (!row) continue;
       try {
-        if (!installed.includes(row.guild)) {
-          g.db.transaction(() => s.cancel(token, "bot left server")).immediate(); continue;
-        }
-        const owner = await this.api.owner(row.guild);
         const pool = g.sql("SELECT user FROM giveaway_entries WHERE giveaway=? ORDER BY user").all(token).map(r => r.user);
         for (let i = pool.length - 1; i > 0; i--) { const j = g.rng.int(0, i); [pool[i], pool[j]] = [pool[j], pool[i]]; }
-        const winners = [], deadline = Date.now() + 30000;
-        for (let offset = 0; offset < Math.min(pool.length, 100) && winners.length < row.winners && Date.now() < deadline; offset += 4) {
-          const batch = pool.slice(offset, offset + 4);
-          const eligible = await Promise.all(batch.map(async user => {
-            if (user === row.owner) return false;
-            if (!g.sql("SELECT 1 FROM agreements WHERE user=?").get(user) || g.player(user).wallet > MAX - row.total / row.winners) return false;
-            return this.api.eligible(row.guild, user);
-          }));
-          for (let i = 0; i < batch.length && winners.length < row.winners; i++) if (eligible[i]) winners.push(batch[i]);
+        s.finish(row, pool.slice(0, row.winners));
+      } catch (e) { this.log("Giveaway recovery failed; lease will retry:", e); }
+    }
+    await this.announcePending();
+  }
+  async announcePending() {
+    const g = this.service.game;
+    const pending = g.sql("SELECT giveaway FROM giveaway_announcements WHERE delivered=0 AND next_attempt<=? AND lease_until<=? ORDER BY next_attempt,giveaway LIMIT 5").all(g.clock(), g.clock());
+    for (const { giveaway } of pending) {
+      const lease = id();
+      const claimed = g.sql("UPDATE giveaway_announcements SET lease=?,lease_until=? WHERE giveaway=? AND delivered=0 AND next_attempt<=? AND lease_until<=?").run(lease, g.clock() + 120000, giveaway, g.clock(), g.clock()).changes;
+      if (!claimed) continue;
+      try {
+        const result = g.sql("SELECT * FROM server_giveaways WHERE id=?").get(giveaway);
+        const winners = g.sql("SELECT user,amount FROM giveaway_winners WHERE giveaway=? ORDER BY user").all(giveaway);
+        if (result.status === "paid") {
+          result.winnerIds = winners.map(w => w.user);
+          result.prize = winners[0].amount;
+          result.total = winners.reduce((n, w) => n + w.amount, 0);
+          result.held = g.sql("SELECT COALESCE(SUM(remaining),0) AS amount FROM giveaway_payments WHERE giveaway=?").get(giveaway).amount;
         }
-        const result = s.finish(row, winners, owner);
-        if (result) try { await this.api.announce(result); } catch (e) { this.log("Giveaway announcement failed; settlement is saved:", e.code || e.message); }
-      } catch (e) { this.log("Giveaway recovery failed; lease will retry:", e.code || e.message); }
+        await this.api.announce(result);
+        g.sql("UPDATE giveaway_announcements SET delivered=1,lease=NULL,lease_until=0 WHERE giveaway=? AND lease=?").run(giveaway, lease);
+      } catch (error) {
+        g.sql("UPDATE giveaway_announcements SET next_attempt=?,lease=NULL,lease_until=0 WHERE giveaway=? AND lease=?").run(g.clock() + 60000, giveaway, lease);
+        this.log("Giveaway announcement failed; payment is saved and delivery will retry:", error);
+      }
     }
   }
 }

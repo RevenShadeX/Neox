@@ -10,7 +10,7 @@ const { GiveawayRecovery } = require("./giveaways");
 const allowedMentions = { parse: [], repliedUser: false };
 function giveawayPayload(p) {
   return { content: "", embeds: [{ color: 0xc49a54, title: "🎁 SERVER GIVEAWAY",
-    description: `**${p.total.toLocaleString("en-US")} Neo Coins** • ${p.winners} random winner${p.winners === 1 ? "" : "s"}\nEach winner: **${(p.total / p.winners).toLocaleString("en-US")} Neo Coins**\nEnds <t:${Math.floor(p.ends / 1000)}:R>.\n\nAccept Neox rules, then enter below. The giveaway creator and bots are excluded. Prizes become ordinary wallet coins.`,
+    description: `**${p.total.toLocaleString("en-US")} Neo Coins** • Up to ${p.winners} random winner${p.winners === 1 ? "" : "s"}\nEach winner: **${(p.total / p.winners).toLocaleString("en-US")} Neo Coins**\nEnds <t:${Math.floor(p.ends / 1000)}:R>.\n\nAccept Neox rules, then enter below. The giveaway creator and bots are excluded. Entry remains valid if you leave the server. If fewer players enter, each receives the advertised prize; unused funds return only within the original month. Full-wallet prizes are saved and credited automatically when space opens.`,
     footer: { text: `Giveaway ${p.id} • Funded from the restricted server allowance` } }],
     components: [{ type: 1, components: [{ type: 2, style: 1, custom_id: `ng:${p.id}:join`, label: "Enter Giveaway" }] }], allowedMentions };
 }
@@ -27,7 +27,7 @@ function singlePayload(payload, emojis) {
 }
 function winnerPayload(result, names, file) {
   return {content:"", embeds:[{color:0x9e3047,title:"🏆 NEOX GIVEAWAY WINNERS",description:
-    `${result.winnerIds.map((user,i)=>`${i+1}. **${markdownName(cleanName(names[i]).slice(0,32))}** • <@${user}>`).join("\n")}\n\nEach won **${result.prize.toLocaleString("en-US")} Neo Coins**\nTotal prize: **${result.total.toLocaleString("en-US")} Neo Coins**\nPrizes are saved and ready to spend.`,
+    `${result.winnerIds.map((user,i)=>`${i+1}. **${markdownName(cleanName(names[i]).slice(0,32))}** • <@${user}>`).join("\n")}\n\nEach won **${result.prize.toLocaleString("en-US")} Neo Coins**\nTotal prize: **${result.total.toLocaleString("en-US")} Neo Coins**\n${result.held ? "Prizes are saved. Amounts exceeding wallet capacity will be credited automatically when space opens." : "Prizes are saved and ready to spend."}`,
     ...(file ? {image:{url:"attachment://neox-giveaway.png"}} : {}),footer:{text:`Giveaway ${result.id}`}}], files:file?[file]:[],attachments:[],components:[],allowedMentions};
 }
 function discordGiveaways(client, game, log, {emojis, render = giveawayImage} = {}) {
@@ -35,24 +35,21 @@ function discordGiveaways(client, game, log, {emojis, render = giveawayImage} = 
   const guild = id => client.guilds.fetch({ guild: id, force: true });
   const recovery = new GiveawayRecovery(service, {
     guildIds: () => [...client.guilds.cache.keys()],
-    owner: async id => {
-      const current = await guild(id);
-      if (!current?.ownerId) throw Error("Server owner unavailable");
-      return current.ownerId;
-    },
-    eligible: async (id, user) => {
-      const current = client.guilds.cache.get(id);
-      if (!current) throw Error("Server unavailable");
-      try { const member = await current.members.fetch({ user, force: true, cache: false }); return !!member && member.user.bot === false; }
-      catch (error) { if (error.code === 10007 || error.code === 10013) return false; throw error; }
-    },
     announce: async result => {
-      if (!result.message) return;
       const channel = await client.channels.fetch(result.channel);
       if (!channel || channel.guildId !== result.guild) throw Error("Giveaway channel unavailable");
-      const message = await channel.messages.fetch(result.message).catch(() => null);
+      const message = result.message ? await channel.messages.fetch(result.message).catch(error => {
+        if (error.code === 10008) return null; // A deleted message needs a replacement.
+        throw error; // An outage is retryable; do not assume the message is gone.
+      }) : null;
+      const sendReplacement = async payload => {
+        const sent = await channel.send({ ...payload, nonce: result.id, enforceNonce: true });
+        if (sent?.id) game.sql("UPDATE server_giveaways SET message=? WHERE id=?").run(sent.id, result.id);
+      };
       if (result.status !== "paid") {
-        await (message ? message.edit.bind(message) : channel.send.bind(channel))(singlePayload({content:"Giveaway ended without a payout. Funds return only to an unexpired original month's allowance.",embeds:[],components:[],allowedMentions}, emojis));
+        const payload = singlePayload({content:"Giveaway ended with no entries, so no winner could be drawn. Reserved funds return only within the original UTC month.",embeds:[],components:[],allowedMentions}, emojis);
+        if (message) await message.edit(payload);
+        else await sendReplacement(payload);
         return;
       }
       const names = await Promise.all(result.winnerIds.map(async user => {
@@ -71,7 +68,7 @@ function discordGiveaways(client, game, log, {emojis, render = giveawayImage} = 
         try { fallback = singlePayload(winnerPayload(result,names),emojis); }
         catch { fallback = singlePayload(winnerPayload(result,names)); }
         try { if (!message) throw Error("Original giveaway message unavailable"); await message.edit(fallback); }
-        catch { await channel.send(fallback); }
+        catch { await sendReplacement(fallback); }
       }
     },
   }, log);

@@ -457,8 +457,10 @@ class Game {
         return { content: "Pong!", completed: false, presentation: { kind: "ping" } };
       case "help":
         return guide(this.getPrefix(ctx.guildId), a[0]);
-      case "cash":
-        return `🪙 **Neo Coins**\n👛 Wallet: **${fmt(p.wallet)}**\n🏦 Bank: **${fmt(p.bank)}**`;
+      case "cash": {
+        const held = this.sql("SELECT COALESCE(SUM(remaining),0) AS amount FROM giveaway_payments WHERE user=?").get(id).amount;
+        return `🪙 **Neo Coins**\n👛 Wallet: **${fmt(p.wallet)}**\n🏦 Bank: **${fmt(p.bank)}**${held ? `\n🎁 Saved giveaway prizes: **${fmt(held)}** • Credited automatically when wallet space opens.` : ""}`;
+      }
       case "deposit":
       case "withdraw": {
         assert(a.length === 1, `Usage: ${name} amount|all`);

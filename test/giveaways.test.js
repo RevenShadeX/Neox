@@ -82,32 +82,45 @@ test("random giveaway pays eligible members normal Neo Coins once, even when ann
   assert.equal(f.store.sql("SELECT SUM(amount) AS n FROM economy_events WHERE source='server giveaways'").get().n,1000);
   f.run("buy",["food","1"],A);assert.equal(f.game.player(A).wallet,400);
 });
-test("draw rejects departed members and insufficient participants without losing the fund",async t=>{
+test("draw pays entered players even after departure without Discord eligibility calls",async t=>{
   const f=fixture(t);f.approve();const p=f.start(["1000","1","2"]);f.enter(p.id,A);f.enter(p.id,B);f.tick(61000);
-  await runner(f,{owner:async()=>A,eligible:async()=>false}).recover();
-  assert.equal(f.game.player(A).wallet,0);assert.equal(f.game.player(B).wallet,0);
-  assert.equal(f.store.sql("SELECT available FROM giveaway_funds").get().available,1000000);
-  assert.equal(f.store.sql("SELECT status FROM server_giveaways").get().status,"cancelled");
+  let calls=0;
+  await runner(f,{owner:async()=>{calls++;throw Error("Discord down");},eligible:async()=>{calls++;return false;}}).recover();
+  assert.equal(calls,0);
+  assert.equal(f.game.player(A).wallet,500);assert.equal(f.game.player(B).wallet,500);
+  assert.equal(f.store.sql("SELECT available FROM giveaway_funds").get().available,999000);
+  assert.equal(f.store.sql("SELECT status FROM server_giveaways").get().status,"paid");
 });
-test("wallet overflow at settlement cancels atomically with no partial payout",t=>{
+test("wallet overflow awards every winner and holds only the amount that cannot fit",async t=>{
   const f=fixture(t);f.approve();const p=f.start(["1000","1","2"]);f.enter(p.id,A);f.enter(p.id,B);f.tick(61000);
   f.store.sql("UPDATE players SET wallet=? WHERE id=?").run(MAX,B);
   const row=f.game.giveaways.claim(p.id);const result=f.game.giveaways.finish(row,[A,B],S);
-  assert.equal(result.status,"cancelled");assert.equal(f.game.player(A).wallet,0);assert.equal(f.game.player(B).wallet,MAX);
-  assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM giveaway_winners").get().n,0);assert.equal(f.store.sql("SELECT available FROM giveaway_funds").get().available,1000000);
+  assert.equal(result.status,"paid");assert.equal(f.game.player(A).wallet,500);assert.equal(f.game.player(B).wallet,MAX);
+  assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM giveaway_winners").get().n,2);assert.equal(f.store.sql("SELECT available FROM giveaway_funds").get().available,999000);
+  assert.equal(f.store.sql("SELECT remaining FROM giveaway_payments WHERE user=?").get(B).remaining,500);
+  f.store.sql("UPDATE players SET wallet=wallet-200 WHERE id=?").run(B);
+  await runner(f).recover();assert.equal(f.game.player(B).wallet,MAX);
+  assert.equal(f.store.sql("SELECT remaining FROM giveaway_payments WHERE user=?").get(B).remaining,300);
+  f.store.sql("UPDATE players SET wallet=wallet-300 WHERE id=?").run(B);
+  await runner(f).recover();await runner(f).recover();
+  assert.equal(f.game.player(B).wallet,MAX);assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM giveaway_payments").get().n,0);
+  assert.equal(f.store.sql("SELECT SUM(amount) AS n FROM economy_events WHERE source='server giveaways'").get().n,1000);
 });
 test("invalid winner lists cannot pay outsiders or duplicate recipients",t=>{
   const f=fixture(t);f.approve();const p=f.start(["1000","1","2"]);f.enter(p.id,A);f.enter(p.id,B);f.tick(61000);
-  const row=f.game.giveaways.claim(p.id);assert.equal(f.game.giveaways.finish(row,[A,A],S).status,"cancelled");
+  const row=f.game.giveaways.claim(p.id);assert.throws(()=>f.game.giveaways.finish(row,[A,A],S),/Invalid giveaway winner/);
+  assert.throws(()=>f.game.giveaways.finish(row,[A,S],S),/Invalid giveaway winner/);
   assert.equal(f.game.player(A).wallet,0);
+  assert.equal(f.store.sql("SELECT status FROM server_giveaways WHERE id=?").get(p.id).status,"drawing");
 });
-test("pause cancels reservations; resume never refills current month's spent money",async t=>{
+test("pause blocks new funding but preserves reserved prizes; resume never refills spent funds",async t=>{
   const f=fixture(t);f.approve();const p=f.start();f.enter(p.id);f.tick(61000);await runner(f).recover();
   const left=f.store.sql("SELECT available FROM giveaway_funds").get().available;
-  const active=f.start();f.run("ownersmoney",["pause",G]);
-  assert.equal(f.store.sql("SELECT status FROM server_giveaways WHERE id=?").get(active.id).status,"cancelled");
+  const active=f.start();f.enter(active.id);f.run("ownersmoney",["pause",G]);
+  assert.equal(f.store.sql("SELECT status FROM server_giveaways WHERE id=?").get(active.id).status,"open");
   assert.throws(()=>f.run("giveawayfund",[],S),/paused/);
-  f.run("ownersmoney",["resume",G]);assert.equal(f.store.sql("SELECT available FROM giveaway_funds").get().available,left);
+  f.tick(61000);await runner(f).recover();assert.equal(f.game.player(A).wallet,2000);
+  f.run("ownersmoney",["resume",G]);assert.equal(f.store.sql("SELECT available FROM giveaway_funds").get().available,left-1000);
   assert.match(f.run("ownersmoney",["history",G]).content,/paid|pause|resume/);
 });
 test("month-end preserves reservations and pays them without using the new allowance",async t=>{
@@ -119,10 +132,10 @@ test("month-end preserves reservations and pays them without using the new allow
   assert.equal(f.store.sql("SELECT available FROM giveaway_funds WHERE month='2026-11'").get().available,0);
   assert.equal(f.store.sql("SELECT available FROM giveaway_funds WHERE month='2026-12'").get().available,1000000);
 });
-test("transient membership failures retain a retryable lease and restart pays only once",async t=>{
+test("membership API outages do not block payouts and restart cannot pay twice",async t=>{
   const f=fixture(t);f.approve();const p=f.start();f.enter(p.id);f.tick(61000);
   await runner(f,{eligible:async()=>{throw Error("temporary timeout");}}).recover();
-  assert.equal(f.store.sql("SELECT status FROM server_giveaways").get().status,"drawing");assert.equal(f.game.player(A).wallet,0);
+  assert.equal(f.store.sql("SELECT status FROM server_giveaways").get().status,"paid");assert.equal(f.game.player(A).wallet,1000);
   f.tick(121000);await runner(f).recover();assert.equal(f.game.player(A).wallet,1000);
   assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM giveaway_winners").get().n,1);
 });
@@ -306,7 +319,7 @@ test("render failure and a deleted original message send one complete fallback f
   const f=fixture(t);const p=f.start(["1000","1","2"]);f.enter(p.id,A);f.enter(p.id,B);f.tick(61000);
   f.store.sql("UPDATE server_giveaways SET message='55555' WHERE id=?").run(p.id);
   const sent=[],member=async({user})=>({id:user,user:{bot:false},displayName:user===A?"Alice":"Bob"});
-  const client={guilds:{cache:new Map([[G,{members:{fetch:member}}]]),fetch:async()=>({ownerId:S})},channels:{fetch:async()=>({guildId:G,messages:{fetch:async()=>{throw Error("Unknown message");}},send:async p=>sent.push(p)})}};
+  const client={guilds:{cache:new Map([[G,{members:{fetch:member}}]]),fetch:async()=>({ownerId:S})},channels:{fetch:async()=>({guildId:G,messages:{fetch:async()=>{throw Object.assign(Error("Unknown message"),{code:10008});}},send:async p=>sent.push(p)})}};
   await discordGiveaways(client,f.game,()=>{},{render:async()=>{throw Error("renderer busy");}}).recovery.recover();
   assert.equal(sent.length,1);assert.equal(sent[0].files.length,0);assert.match(sent[0].embeds[0].description,/Alice[\s\S]*Bob|Bob[\s\S]*Alice/);
   assert.deepEqual(sent[0].allowedMentions.parse,[]);assert.equal(f.game.player(A).wallet,500);
@@ -331,4 +344,154 @@ test("giveaway help documents the setup panel, administrator access, automatic g
   const help=f.run("help",["giveaway"],S).content;
   assert.match(help,/Administrator/);assert.match(help,/setup panel/);assert.match(help,/30 days/);assert.match(help,/across month-end/);assert.match(help,/creator cannot win/);
   const fund=f.run("help",["giveawayfund"],S).content;assert.match(fund,/automatically/);assert.match(fund,/confirmed prizes/);
+});
+
+test("all 500 saved entries participate, including players beyond the old 100-candidate limit",async t=>{
+  const f=fixture(t,{rng:{int:(min,max)=>Math.max(min,max-1)}});
+  const p=f.start(["1000","43200","1"]),users=[];
+  for(let i=0;i<500;i++){
+    const user=String(200000000000000000n+BigInt(i));users.push(user);
+    f.run("agree",[],user);f.enter(p.id,user);
+  }
+  assert.throws(()=>{f.run("agree",[],BOT);f.enter(p.id,BOT);},/500 entries/);
+  f.set(p.ends+1);
+  await runner(f,{guildIds:()=>[],owner:async()=>{throw Error("must not fetch owner");},eligible:async()=>{throw Error("must not check membership");}}).recover();
+  assert.equal(f.game.player(users[499]).wallet,1000);
+  assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM giveaway_winners WHERE giveaway=?").get(p.id).n,1);
+});
+
+test("fewer entrants win the advertised share and only unused funds return to the original month",async t=>{
+  const f=fixture(t),p=f.start(["1000","1","4"]);f.enter(p.id,A);f.enter(p.id,B);f.tick(61000);
+  let result;
+  await runner(f,{announce:async p=>{result=p;}}).recover();
+  assert.equal(f.game.player(A).wallet,250);assert.equal(f.game.player(B).wallet,250);
+  assert.equal(result.total,500);assert.equal(result.prize,250);assert.equal(result.winnerIds.length,2);
+  assert.equal(f.store.sql("SELECT available FROM giveaway_funds").get().available,999500);
+  assert.equal(f.store.sql("SELECT SUM(amount) AS n FROM economy_events WHERE source='server giveaways'").get().n,500);
+  f.set(Date.UTC(2026,10,30,23,59));const next=f.start(["1000","3d","4"]);f.enter(next.id,A);
+  f.set(next.ends+1);await runner(f).recover();
+  assert.equal(f.game.player(A).wallet,500);
+  assert.equal(f.store.sql("SELECT available FROM giveaway_funds WHERE month='2026-12'").get().available,1000000);
+  assert.equal(f.store.sql("SELECT available FROM giveaway_funds WHERE month='2026-11'").get().available,0);
+});
+
+test("rules acceptance at entry remains sufficient after later decline and bot removal",async t=>{
+  const f=fixture(t),p=f.start();f.enter(p.id,A);f.run("decline",[],A);f.tick(61000);
+  await runner(f,{guildIds:()=>[]}).recover();
+  assert.equal(f.game.player(A).wallet,1000);
+  assert.equal(f.store.sql("SELECT status FROM server_giveaways").get().status,"paid");
+});
+
+test("zero entrants cause an explicit no-entries result without issuing coins",async t=>{
+  const f=fixture(t),p=f.start();f.tick(61000);let result;
+  await runner(f,{announce:async p=>{result=p;}}).recover();
+  assert.equal(result.reason,"no entries");assert.equal(result.status,"cancelled");
+  assert.equal(f.store.sql("SELECT available FROM giveaway_funds").get().available,1000000);
+  assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM giveaway_winners").get().n,0);
+  assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM economy_events WHERE source='server giveaways'").get().n,0);
+});
+
+test("failed announcements retry after reopening SQLite with the same winners and no second payment",async t=>{
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),"neox-giveaway-retry-"));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+  const filename=path.join(dir,"state.sqlite"),f=fixture(t,{filename}),p=f.start();f.enter(p.id,A);f.tick(61000);
+  let attempts=0;
+  const r=runner(f,{announce:async()=>{attempts++;throw Error("Discord down");}});
+  await r.recover();await r.recover();assert.equal(attempts,1);
+  assert.equal(f.game.player(A).wallet,1000);
+  assert.equal(f.store.sql("SELECT delivered FROM giveaway_announcements").get().delivered,0);
+  const store=open(filename);t.after(()=>store.close());const game=new Game(store,{clock:f.clock});
+  f.tick(60001);let result;
+  const resumed=new GiveawayRecovery(game.giveaways,{guildIds:()=>[],announce:async p=>{attempts++;result=p;}},()=>{});
+  await resumed.recover();await resumed.recover();
+  assert.equal(attempts,2);assert.deepEqual(result.winnerIds,[A]);assert.equal(result.prize,1000);
+  assert.equal(game.player(A).wallet,1000);assert.equal(store.sql("SELECT delivered FROM giveaway_announcements").get().delivered,1);
+  assert.equal(store.sql("SELECT COUNT(*) AS n FROM economy_events WHERE source='server giveaways'").get().n,1);
+});
+
+test("announcement leases prevent concurrent workers from posting the same result",async t=>{
+  const f=fixture(t),p=f.start();f.enter(p.id,A);f.tick(61000);let calls=0,release;
+  const blocked=new Promise(resolve=>{release=resolve;});
+  const first=runner(f,{announce:async()=>{calls++;await blocked;}}).recover();
+  await new Promise(resolve=>setImmediate(resolve));
+  await runner(f,{announce:async()=>{calls++;}}).recover();
+  assert.equal(calls,1);release();await first;assert.equal(f.game.player(A).wallet,1000);
+});
+
+test("interrupted announcement leases expire and resume without repeating settlement",async t=>{
+  const f=fixture(t),p=f.start();f.enter(p.id,A);f.tick(61000);
+  f.game.giveaways.finish(f.game.giveaways.claim(p.id),[A]);
+  f.store.sql("UPDATE giveaway_announcements SET lease='interrupted',lease_until=?").run(f.clock()+120000);
+  let calls=0;const r=runner(f,{announce:async()=>{calls++;}});
+  await r.recover();assert.equal(calls,0);f.tick(120001);await r.recover();
+  assert.equal(calls,1);assert.equal(f.game.player(A).wallet,1000);
+});
+
+test("held prizes survive SQLite restart and cleanup until automatically credited",async t=>{
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),"neox-giveaway-held-"));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+  const filename=path.join(dir,"state.sqlite"),f=fixture(t,{filename});
+  f.store.sql("UPDATE players SET wallet=? WHERE id=?").run(MAX,A);
+  const p=f.start();f.enter(p.id,A);f.tick(61000);await runner(f).recover();
+  assert.equal(f.store.sql("SELECT remaining FROM giveaway_payments").get().remaining,1000);
+  assert.match(f.run("cash",[],A).content,/Saved giveaway prizes/);
+  const store=open(filename);t.after(()=>store.close());const game=new Game(store,{clock:f.clock});
+  store.maintenance(f.clock()+100*86400000);
+  assert.equal(store.sql("SELECT COUNT(*) AS n FROM giveaway_winners").get().n,1);
+  assert.equal(store.sql("SELECT COUNT(*) AS n FROM server_giveaways").get().n,1);
+  store.sql("UPDATE players SET wallet=wallet-1000 WHERE id=?").run(A);
+  await new GiveawayRecovery(game.giveaways,{guildIds:()=>[],announce:async()=>{}},()=>{}).recover();
+  assert.equal(game.player(A).wallet,MAX);assert.equal(store.sql("SELECT COUNT(*) AS n FROM giveaway_payments").get().n,0);
+  store.maintenance(f.clock()+100*86400000);
+  assert.equal(store.sql("SELECT COUNT(*) AS n FROM server_giveaways").get().n,0);
+});
+
+test("cleanup retains undelivered results and removes them only after delivery",async t=>{
+  const f=fixture(t),p=f.start();f.enter(p.id,A);f.tick(61000);
+  await runner(f,{announce:async()=>{throw Error("unavailable");}}).recover();
+  f.store.maintenance(f.clock()+100*86400000);
+  assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM giveaway_winners").get().n,1);
+  f.tick(60001);await runner(f).recover();
+  f.store.maintenance(f.clock()+100*86400000);
+  assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM server_giveaways").get().n,0);
+});
+
+test("a Discord outage queues the announcement, then missing original messages are replaced durably",async t=>{
+  const f=fixture(t),p=f.start();f.enter(p.id,A);f.tick(61000);
+  f.store.sql("UPDATE server_giveaways SET message='55555' WHERE id=?").run(p.id);
+  let outage=true,fetches=0;const sent=[];
+  const client={guilds:{cache:new Map()},channels:{fetch:async()=>({guildId:G,messages:{fetch:async()=>{fetches++;if(outage)throw Error("network timeout");throw Object.assign(Error("deleted"),{code:10008});}},send:async payload=>{sent.push(payload);return{id:"66666"};}})}};
+  const adapter=discordGiveaways(client,f.game,()=>{},{render:async()=>{throw Error("no canvas");}});
+  await adapter.recovery.recover();assert.equal(sent.length,0);assert.equal(f.game.player(A).wallet,1000);
+  assert.equal(f.store.sql("SELECT delivered FROM giveaway_announcements").get().delivered,0);
+  outage=false;f.tick(60001);await adapter.recovery.recover();await adapter.recovery.recover();
+  assert.equal(fetches,2);assert.equal(sent.length,1);assert.equal(sent[0].nonce,p.id);assert.equal(sent[0].enforceNonce,true);
+  assert.match(sent[0].embeds[0].description,new RegExp(A));
+  assert.equal(f.store.sql("SELECT message FROM server_giveaways").get().message,"66666");
+  assert.equal(f.store.sql("SELECT delivered FROM giveaway_announcements").get().delivered,1);
+});
+
+test("a failure creating the delivery job rolls back wallet credits, held prizes and settlement together",t=>{
+  const f=fixture(t),p=f.start(["1000","1","2"]);f.enter(p.id,A);f.enter(p.id,B);f.tick(61000);
+  f.store.sql("UPDATE players SET wallet=? WHERE id=?").run(MAX,B);
+  const row=f.game.giveaways.claim(p.id);
+  f.store.db.exec("CREATE TRIGGER fail_delivery_job BEFORE INSERT ON giveaway_announcements BEGIN SELECT RAISE(ABORT,'delivery job failed'); END");
+  assert.throws(()=>f.game.giveaways.finish(row,[A,B]),/delivery job failed/);
+  assert.equal(f.game.player(A).wallet,0);assert.equal(f.game.player(B).wallet,MAX);
+  for(const table of ["giveaway_winners","giveaway_payments","giveaway_announcements"])
+    assert.equal(f.store.sql(`SELECT COUNT(*) AS n FROM ${table}`).get().n,0);
+  assert.equal(f.store.sql("SELECT COUNT(*) AS n FROM economy_events WHERE source='server giveaways'").get().n,0);
+  assert.equal(f.store.sql("SELECT status FROM server_giveaways").get().status,"drawing");
+  f.store.db.exec("DROP TRIGGER fail_delivery_job");
+  assert.equal(f.game.giveaways.finish(row,[A,B]).status,"paid");assert.equal(f.game.player(A).wallet,500);
+  assert.equal(f.game.giveaways.finish(row,[A,B]),null);
+});
+
+test("opening an older database adds recovery tables without changing existing reservations or entries",async t=>{
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),"neox-giveaway-upgrade-"));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+  const filename=path.join(dir,"state.sqlite"),f=fixture(t,{filename}),p=f.start();f.enter(p.id,A);
+  f.store.db.exec("DROP TABLE giveaway_payments; DROP TABLE giveaway_announcements;");
+  const store=open(filename);t.after(()=>store.close());const game=new Game(store,{clock:f.clock});
+  assert.equal(store.sql("SELECT available FROM giveaway_funds").get().available,999000);
+  assert.equal(store.sql("SELECT COUNT(*) AS n FROM giveaway_entries").get().n,1);
+  f.tick(61000);await new GiveawayRecovery(game.giveaways,{guildIds:()=>[G],announce:async()=>{}},()=>{}).recover();
+  assert.equal(game.player(A).wallet,1000);assert.equal(store.sql("SELECT delivered FROM giveaway_announcements").get().delivered,1);
 });
