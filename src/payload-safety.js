@@ -1,4 +1,5 @@
 "use strict";
+const { assertUniqueComponentIds } = require("./component-safety");
 // Discord counts UTF-16 code units. Keep surrogate pairs and custom emoji tokens intact.
 function split(value, limit) {
   const tokens = String(value || "").match(/<a?:[A-Za-z0-9_]+:\d+>|[\s\S]/gu) || [];
@@ -15,6 +16,7 @@ function embedSize(e) {
     ...(e.fields || []).flatMap(f => [f.name, f.value])].reduce((n, v) => n + (v?.length || 0), 0);
 }
 function payloadPages(payload) {
+  assertUniqueComponentIds(payload);
   const content = split(payload.content, 2000);
   const embeds = [];
   for (const original of payload.embeds || []) {

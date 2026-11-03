@@ -1,4 +1,5 @@
 "use strict";
+const { validationDetails, interactionRoute, assertUniqueComponentIds } = require("./component-safety");
 const {
   Client,
   ActivityType,
@@ -165,8 +166,8 @@ function createClient(
     err instanceof GameError
       ? `⚠️ ${err.message}`
       : "⚠️ Something went wrong. Please try again. If it keeps happening, contact a server admin.";
-  const logError = (label, error) =>
-    console.warn(label, { code: error.code, name: error.name, message: error.message?.slice(0, 300) });
+  const logError = (label, error, details = {}) =>
+    console.warn(label, { code: error.code, name: error.name, message: error.message?.slice(0, 300), ...validationDetails(error), ...details });
   const giveaways = discordGiveaways(client, game, logError, { emojis });
   const context = (s, interaction = false) => ({
     userId: (interaction ? s.user : s.author).id,
@@ -245,10 +246,25 @@ function createClient(
   async function deliver(output, source, transport) {
     const original = transport;
     const send = async (method, payload, sent) => {
-      const pages = payloadPages(decoratePayload(payload, emojis));
-      const first = method === "finish" ? await original.finish(sent, pages[0]) : await original[method](pages[0]);
-      for (const page of pages.slice(1)) await original.extra(page);
-      return first;
+      const p = output.presentation;
+      const details = {
+        command: source.commandName || registry.resolve(parsePrefix(source.content || "", game.getPrefix(source.guildId))?.command || "") || p?.command,
+        builder: p?.kind === "panel" ? `panel:${p.session.kind}:${p.session.state.stage || "default"}` : p?.kind || "text",
+        operation: method, page: 0,
+      };
+      try {
+        const pages = payloadPages(decoratePayload(payload, emojis));
+        const first = method === "finish" ? await original.finish(sent, pages[0]) : await original[method](pages[0]);
+        for (const [index, page] of pages.slice(1).entries()) {
+          details.page = index + 1;
+          details.operation = "extra";
+          await original.extra(page);
+        }
+        return first;
+      } catch (error) {
+        logError("Discord payload delivery failed:", error, details);
+        throw error;
+      }
     };
     transport = {
       ...original,
@@ -293,7 +309,9 @@ function createClient(
       return;
     }
     if (p?.kind === "modal") {
-      await source.showModal(UI.modal(p));
+      const modal = UI.modal(p);
+      assertUniqueComponentIds(modal.toJSON());
+      await source.showModal(modal);
       return;
     }
     if (p?.kind === "help") {
@@ -461,6 +479,9 @@ function createClient(
     );
   });
   async function failure(i, error) {
+    if (!(error instanceof GameError)) logError("Discord interaction failed:", error, {
+      command: i.commandName, builder: interactionRoute(i),
+    });
     try {
       let payload = {
         content: errorText(error),
@@ -520,7 +541,8 @@ function createClient(
     if (id.startsWith("ngs:")) { await giveaways.setup(i, ctx); return; }
     if (id.startsWith("ng:")) { await giveaways.enter(i, ctx); return; }
     if (id.startsWith("nc:")) {
-      const match = /^nc:(\d{5,22}):(\d{5,22}):(weapons|armors):(\d{1,4}):(\d{10})$/.exec(id);
+      // The optional suffix keeps already-published collection controls usable.
+      const match = /^nc:(\d{5,22}):(\d{5,22}):(weapons|armors):(\d{1,4}):(\d{10})(?::(?:prev|next))?$/.exec(id);
       if (!i.isButton?.() || !match) throw new GameError("Invalid collection control. Open weapons or armors again.");
       if (match[1] !== ctx.userId || match[2] !== ctx.guildId)
         throw new GameError("This collection belongs to another player or server. Open your own collection.");
@@ -607,7 +629,9 @@ function createClient(
       !isModal
     ) {
       const output = game.interact(id, input, ctx);
-      await i.showModal(UI.modal(output.presentation));
+      const modal = UI.modal(output.presentation);
+      assertUniqueComponentIds(modal.toJSON());
+      await i.showModal(modal);
       return;
     }
     if (isModal) await i.deferReply({ flags: 64 });

@@ -74,3 +74,25 @@ test("armor uses the same clean paged layout and clamps after inventory shrink",
   assert.ok(page.components[0].components.every(b=>b.disabled));
   assert.throws(()=>collectionPage(p,null,{owner:A,guild:G,page:-1,expires:123}),/Invalid collection/);
 });
+for (const slash of [false, true]) test(`${slash ? "slash" : "prefix"} single-page armor delivers unique disabled controls`, async t => {
+  const f = fixture(t);
+  f.store.sql("DELETE FROM cooldowns").run();
+  const result = await event(f.client, slash
+    ? { isChatInputCommand: () => true, commandName: "armors", options: { getString: () => null } }
+    : { author: { id: A, bot: false }, content: "n armors", createdTimestamp: Date.now() },
+    slash ? Events.InteractionCreate : Events.MessageCreate);
+  const payload = slash ? result.updated[0] : result.sent[0];
+  const controls = payload.components[0].components;
+  assert.equal(new Set(controls.map(c => c.custom_id)).size, 2);
+  assert.ok(controls.every(c => c.disabled));
+  assert.equal(result.errors.length, 0);
+});
+test("previously published collection IDs remain valid and refresh to unique new controls", async t => {
+  const f = fixture(t);
+  const old = `nc:${A}:${G}:weapons:1:${Math.floor(Date.now() / 1000) + 600}`;
+  const result = await event(f.client, { isButton: () => true, customId: old });
+  assert.equal(result.errors.length, 0);
+  assert.match(result.updated[0].embeds[0].title, /BOW/);
+  assert.match(result.updated[0].components[0].components[0].custom_id, /:prev$/);
+  assert.match(result.updated[0].components[0].components[1].custom_id, /:next$/);
+});

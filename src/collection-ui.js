@@ -39,11 +39,12 @@ function collectionPage(p, emojis, { owner, guild, page = 0, expires, prefix = "
   page = Math.min(page, cards.length - 1);
   if (!Number.isInteger(page) || page < 0) throw new GameError("Invalid collection page.");
   const payload = cards[page];
-  const id = target => `nc:${owner}:${guild}:${p.command}:${target}:${expires}`;
+  // Discord requires unique IDs even for disabled controls on a one-page collection.
+  const id = (target, direction) => `nc:${owner}:${guild}:${p.command}:${target}:${expires}:${direction}`;
   payload.embeds[0].footer.text = `Page ${page + 1}/${cards.length} • ${prefix} equip <gear-ID> • Controls last 10 minutes`;
   payload.components = [{ type: 1, components: [
-    { type: 2, style: 2, label: "Previous", custom_id: id(Math.max(0, page - 1)), disabled: page === 0 },
-    { type: 2, style: 2, label: "Next", custom_id: id(Math.min(cards.length - 1, page + 1)), disabled: page === cards.length - 1 },
+    { type: 2, style: 2, label: "Previous", custom_id: id(Math.max(0, page - 1), "prev"), disabled: page === 0 },
+    { type: 2, style: 2, label: "Next", custom_id: id(Math.min(cards.length - 1, page + 1), "next"), disabled: page === cards.length - 1 },
   ] }];
   return payload;
 }

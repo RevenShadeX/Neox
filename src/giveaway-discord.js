@@ -5,6 +5,7 @@ const { decoratePayload } = require("./emoji-decorate");
 const { payloadPages } = require("./payload-safety");
 const { cleanName, markdownName } = require("./text");
 const { GameError } = require("./errors");
+const { assertUniqueComponentIds } = require("./component-safety");
 const { GiveawayRecovery } = require("./giveaways");
 const allowedMentions = { parse: [], repliedUser: false };
 function giveawayPayload(p) {
@@ -100,8 +101,10 @@ function discordGiveaways(client, game, log, {emojis, render = giveawayImage} = 
       game.requireChannelEnabled(ctx);
       if (action === "edit") {
         if (!i.isButton?.()) throw new GameError("Invalid setup control.");
-        await i.showModal({custom_id:`ngs:${token}:${version}:values`,title:"Giveaway settings",components:
-          [["amount","Total Neo Coins",String(session.state.total)],["duration","Duration (30m, 6h, 3d 12h)",String(session.state.milliseconds/60000)],["winners","Winner count (1–20)",String(session.state.winners)]].map(([custom_id,label,value])=>({type:1,components:[{type:4,style:1,custom_id,label,value,required:true,max_length:60}]}))});
+        const modal = {custom_id:`ngs:${token}:${version}:values`,title:"Giveaway settings",components:
+          [["amount","Total Neo Coins",String(session.state.total)],["duration","Duration (30m, 6h, 3d 12h)",String(session.state.milliseconds/60000)],["winners","Winner count (1–20)",String(session.state.winners)]].map(([custom_id,label,value])=>({type:1,components:[{type:4,style:1,custom_id,label,value,required:true,max_length:60}]}))};
+        assertUniqueComponentIds(modal);
+        await i.showModal(modal);
         return;
       }
       await i.deferUpdate();
